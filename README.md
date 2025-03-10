@@ -38,8 +38,13 @@ pip install -r requirements.txt
 ```bash
 python train.py --train
 ```
+This will create a model file in the `models/` directory.
 
 3. Test the trained agent:
+```bash
+python train.py --test
+```
+Note: You must train the agent first before testing, or specify a path to a pre-trained model:
 ```bash
 python train.py --test --model_path models/CartPole-v1_dqn.pth
 ```

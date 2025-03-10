@@ -30,6 +30,7 @@ def train_dqn(env_name='CartPole-v1', num_episodes=1000, max_t=1000,
     # Training loop
     scores = []
     scores_window = []  # last consecutive_solves scores
+    best_avg_score = -float('inf')
     
     for i_episode in range(1, num_episodes+1):
         state, _ = env.reset()
@@ -61,20 +62,41 @@ def train_dqn(env_name='CartPole-v1', num_episodes=1000, max_t=1000,
         if len(scores_window) > consecutive_solves:
             scores_window.pop(0)
         
-        # Print progress
-        if i_episode % print_every == 0:
-            avg_score = np.mean(scores_window)
-            print(f'Episode {i_episode}\tAverage Score: {avg_score:.2f}\tEpsilon: {agent.epsilon:.2f}')
+        # Calculate current average score
+        avg_score = np.mean(scores_window)
         
-        # Check if environment solved
-        if np.mean(scores_window) >= goal_score and len(scores_window) >= consecutive_solves:
-            print(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score: {np.mean(scores_window):.2f}')
-            
+        # Save model if we have a new best average score
+        if avg_score > best_avg_score:
+            best_avg_score = avg_score
             # Save the trained model
             if not os.path.exists('models'):
                 os.makedirs('models')
             agent.save(f'models/{env_name}_dqn.pth')
+            print(f'New best model saved with average score: {best_avg_score:.2f}')
+        
+        # Print progress
+        if i_episode % print_every == 0:
+            print(f'Episode {i_episode}\tAverage Score: {avg_score:.2f}\tEpsilon: {agent.epsilon:.2f}')
+        
+        # Check if environment solved
+        if avg_score >= goal_score and len(scores_window) >= consecutive_solves:
+            print(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score: {avg_score:.2f}')
+            
+            # Save the final trained model
+            if not os.path.exists('models'):
+                os.makedirs('models')
+            agent.save(f'models/{env_name}_dqn_solved.pth')
             break
+    
+    # If we reach max episodes without solving, save the final model
+    if i_episode >= num_episodes:
+        print(f'\nReached max episodes without solving. Best average score: {best_avg_score:.2f}')
+        print(f'Final average score: {avg_score:.2f}')
+        
+        # Save the final trained model
+        if not os.path.exists('models'):
+            os.makedirs('models')
+        agent.save(f'models/{env_name}_dqn_final.pth')
     
     return scores, agent
 
@@ -120,11 +142,20 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, default='models/CartPole-v1_dqn.pth', help='Path to model to load for testing')
     args = parser.parse_args()
     
+    # Create models directory if it doesn't exist
+    os.makedirs('models', exist_ok=True)
+    
     if args.train:
         scores, agent = train_dqn()
         plot_scores(scores)
         
     if args.test:
+        # Check if model file exists
+        if not os.path.isfile(args.model_path):
+            print(f"Model file '{args.model_path}' not found.")
+            print("Please train the agent first with --train flag or specify correct model path.")
+            exit(1)
+            
         # Create environment to get state/action sizes
         env = gym.make('CartPole-v1')
         state_size = env.observation_space.shape[0]
