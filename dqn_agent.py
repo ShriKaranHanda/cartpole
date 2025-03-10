@@ -47,13 +47,13 @@ class DQNAgent:
                  buffer_size=100000,
                  batch_size=128,
                  gamma=0.99,
-                 lr=0.0003,
+                 lr=0.0005,  # Increased initial learning rate
                  epsilon_start=1.0,
                  epsilon_end=0.01,
-                 epsilon_decay=0.997,  # Slower decay
-                 tau=0.001,
+                 epsilon_decay=0.997,
+                 tau=0.002,  # Increased target update rate
                  update_every=4,
-                 lr_decay=0.9999):  # Learning rate decay factor
+                 lr_decay=0.9995):  # Less aggressive decay
         
         self.state_size = state_size
         self.action_size = action_size
@@ -61,8 +61,8 @@ class DQNAgent:
         self.batch_size = batch_size
         self.gamma = gamma
         self.lr = lr
-        self.initial_lr = lr  # Store initial learning rate
-        self.lr_decay = lr_decay  # Learning rate decay factor
+        self.initial_lr = lr
+        self.lr_decay = lr_decay
         self.epsilon = epsilon_start
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
@@ -85,6 +85,36 @@ class DQNAgent:
         self.t_step = 0
         self.episode_step = 0
         
+    def reset_learning_rate(self, new_lr=None):
+        """Reset the learning rate to boost training."""
+        if new_lr is None:
+            new_lr = self.initial_lr
+            
+        # Update learning rate parameter in optimizer
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = new_lr
+            
+        # Create a new scheduler
+        self.scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=self.lr_decay)
+        
+        return new_lr
+        
+    def fine_tune(self):
+        """Apply fine-tuning boost to the network."""
+        # Slightly adjust network weights to encourage exploration of new strategies
+        with torch.no_grad():
+            # Add small variance to last layer weights to explore new strategies
+            # This can help break out of local optima
+            for name, param in self.policy_net.named_parameters():
+                if 'fc3.weight' in name:  # Focus on final layer
+                    noise = torch.randn_like(param) * 0.01  # Small noise
+                    param.add_(noise)
+                    
+        # Copy to target network with higher update rate
+        self.tau = 0.1  # Temporary increase for one big update
+        self.soft_update()
+        self.tau = 0.002  # Reset to normal value
+    
     def step(self, state, action, reward, next_state, done):
         # Store transition in replay buffer
         self.memory.push(state, action, next_state, reward, done)

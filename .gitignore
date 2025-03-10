@@ -1,4 +1,13 @@
 venv
 plots
 __pycache__
-models
+models*
+*.pth
+*.png
+*.toc
+*.aux
+*.log
+*.out
+*.fdb_latexmk
+*.fls
+*.synctex.gz

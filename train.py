@@ -7,8 +7,9 @@ import argparse
 import os
 import time
 from datetime import timedelta
+from collections import deque
 
-def train_dqn(env_name='CartPole-v1', num_episodes=3000, max_t=500, 
+def train_dqn(env_name='CartPole-v1', num_episodes=2000, max_t=500, 
               print_every=100, goal_score=475.0, consecutive_solves=100,
               save_checkpoint_every=500, resume_from=None, starting_episode=1):
     """Train DQN agent on specified environment.
@@ -44,8 +45,14 @@ def train_dqn(env_name='CartPole-v1', num_episodes=3000, max_t=500,
     # Training loop
     scores = []
     scores_window = []  # last consecutive_solves scores
+    scores_windows = {
+        "last_10": deque(maxlen=10),
+        "last_50": deque(maxlen=50),
+        "last_100": deque(maxlen=100)
+    }
+    
     best_avg_score = -float('inf')
-    best_avg_score_episode = 0  # Episode when best score was achieved
+    best_avg_score_episode = 0
     
     # Create directory for models if it doesn't exist
     if not os.path.exists('models'):
@@ -64,12 +71,19 @@ def train_dqn(env_name='CartPole-v1', num_episodes=3000, max_t=500,
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
             
-            # Custom reward to encourage pole balancing
-            # Penalize more for early termination
+            # Enhanced reward shaping based on progress
             modified_reward = reward
-            if done and t < max_t - 1:
-                modified_reward = -1.0  # Penalty for falling
             
+            # Penalize early termination more severely
+            if done and t < max_t - 1:
+                # Scale penalty based on how early the failure occurs
+                time_factor = 1.0 - (t / max_t)
+                modified_reward = -1.0 - time_factor  # Higher penalty for earlier failures
+            
+            # Small bonus for lasting longer (especially in early training)
+            elif t > 100 and not done:
+                modified_reward = reward * 1.05
+                
             # Process step
             agent.step(state, action, modified_reward, next_state, done)
             
@@ -83,6 +97,10 @@ def train_dqn(env_name='CartPole-v1', num_episodes=3000, max_t=500,
         # Save score
         scores.append(score)
         scores_window.append(score)
+        
+        # Update different window sizes
+        for window in scores_windows.values():
+            window.append(score)
         
         # Only keep the most recent consecutive_solves scores
         if len(scores_window) > consecutive_solves:
@@ -116,9 +134,12 @@ def train_dqn(env_name='CartPole-v1', num_episodes=3000, max_t=500,
                 agent.save(f'models/{env_name}_dqn_best.pth')
                 print(f'New best model saved with average score: {best_avg_score:.2f}')
                 
-                # If we've gotten close to solving but not quite there, save a special checkpoint
-                if best_avg_score > goal_score * 0.9:
-                    agent.save(f'models/{env_name}_dqn_near_solved_{i_episode}.pth')
+                # Save additional models at various thresholds
+                thresholds = [300, 350, 400, 450, 470]
+                for threshold in thresholds:
+                    if best_avg_score >= threshold and not os.path.exists(f'models/{env_name}_dqn_{threshold}.pth'):
+                        agent.save(f'models/{env_name}_dqn_{threshold}.pth')
+                        print(f'Threshold model saved at score {threshold}')
         
         # Check if environment solved
         if avg_score >= goal_score and len(scores_window) >= consecutive_solves:
@@ -129,6 +150,14 @@ def train_dqn(env_name='CartPole-v1', num_episodes=3000, max_t=500,
             # Save the final trained model
             agent.save(f'models/{env_name}_dqn_solved.pth')
             break
+        
+        # Early stopping condition - if almost solved, don't continue indefinitely
+        elif i_episode > starting_episode + num_episodes // 2 and best_avg_score > goal_score * 0.95:
+            short_window_avg = np.mean(scores_windows["last_50"])
+            # If recent performance is degrading compared to best, stop early
+            if short_window_avg < best_avg_score * 0.9:
+                print(f'\nEarly stopping at episode {i_episode}. Recent avg {short_window_avg:.2f} declined from best {best_avg_score:.2f}')
+                break
     
     # If we reach max episodes without solving, save the final model
     if i_episode >= starting_episode + num_episodes - 1:
@@ -185,8 +214,8 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, default='models/CartPole-v1_dqn_best.pth', help='Path to model to load for testing')
     parser.add_argument('--resume', action='store_true', help='Resume training from a checkpoint')
     parser.add_argument('--resume_from', type=str, default='models/CartPole-v1_dqn_best.pth', help='Path to model to resume training from')
-    parser.add_argument('--start_episode', type=int, default=1701, help='Episode to start from when resuming')
-    parser.add_argument('--num_episodes', type=int, default=1000, help='Number of episodes to train for')
+    parser.add_argument('--start_episode', type=int, default=1, help='Episode to start from when resuming')
+    parser.add_argument('--num_episodes', type=int, default=2000, help='Number of episodes to train for')
     args = parser.parse_args()
     
     # Create models directory if it doesn't exist
