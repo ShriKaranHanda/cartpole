@@ -5,6 +5,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random
 from collections import deque, namedtuple
+import math
 
 # Define a transition tuple
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward', 'done'))
@@ -12,12 +13,38 @@ Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'
 class ReplayBuffer:
     def __init__(self, capacity):
         self.memory = deque(maxlen=capacity)
+        self.priorities = deque(maxlen=capacity)
+        self.max_priority = 1.0
     
     def push(self, *args):
         self.memory.append(Transition(*args))
+        self.priorities.append(self.max_priority)  # New experiences get max priority
     
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
+    def sample(self, batch_size, alpha=0.6):
+        """Sample with prioritization. Alpha determines how much prioritization is used."""
+        if len(self.memory) == len(self.priorities):
+            # Convert priorities to probabilities
+            probs = np.array(self.priorities) ** alpha
+            probs /= np.sum(probs)
+            
+            # Sample based on priorities
+            indices = np.random.choice(len(self.memory), batch_size, p=probs, replace=False)
+            experiences = [self.memory[i] for i in indices]
+            return experiences, indices
+        else:
+            # Fallback to random sampling if priorities don't match memory
+            indices = random.sample(range(len(self.memory)), batch_size)
+            experiences = [self.memory[i] for i in indices]
+            return experiences, indices
+    
+    def update_priorities(self, indices, errors, epsilon=0.01):
+        """Update priorities based on TD errors"""
+        for i, error in zip(indices, errors):
+            if i < len(self.priorities):  # Safety check
+                # Convert TD error to priority (add epsilon to ensure non-zero probability)
+                priority = abs(error) + epsilon
+                self.priorities[i] = priority
+                self.max_priority = max(self.max_priority, priority)
     
     def __len__(self):
         return len(self.memory)
@@ -52,7 +79,8 @@ class DQNAgent:
                  epsilon_end=0.01,
                  epsilon_decay=0.997,  # Slower decay
                  tau=0.001,
-                 update_every=4):
+                 update_every=4,
+                 lr_decay=0.9999):  # Learning rate decay factor
         
         self.state_size = state_size
         self.action_size = action_size
@@ -60,6 +88,8 @@ class DQNAgent:
         self.batch_size = batch_size
         self.gamma = gamma
         self.lr = lr
+        self.initial_lr = lr  # Store initial learning rate
+        self.lr_decay = lr_decay  # Learning rate decay factor
         self.epsilon = epsilon_start
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
@@ -73,10 +103,14 @@ class DQNAgent:
         self.target_net.eval()  # Set target network to evaluation mode
         
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr, weight_decay=1e-5)  # Added weight decay
+        # Create scheduler for learning rate decay
+        self.scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=self.lr_decay)
+        
         self.memory = ReplayBuffer(buffer_size)
         
         # Initialize step counter
         self.t_step = 0
+        self.episode_step = 0
         
     def step(self, state, action, reward, next_state, done):
         # Store transition in replay buffer
@@ -85,8 +119,17 @@ class DQNAgent:
         # Learn every update_every time steps
         self.t_step = (self.t_step + 1) % self.update_every
         if self.t_step == 0 and len(self.memory) > self.batch_size:
-            experiences = self.memory.sample(self.batch_size)
-            self.learn(experiences)
+            experiences, indices = self.memory.sample(self.batch_size)
+            td_errors = self.learn(experiences)
+            # Update experience priorities
+            self.memory.update_priorities(indices, td_errors.detach().numpy())
+        
+        self.episode_step += 1
+        if done:
+            # Reset episode step counter
+            self.episode_step = 0
+            # Decay learning rate
+            self.scheduler.step()
     
     def act(self, state, eval_mode=False):
         state = torch.from_numpy(state).float().unsqueeze(0)
@@ -126,6 +169,9 @@ class DQNAgent:
         # Get expected Q values from policy model
         Q_expected = self.policy_net(states).gather(1, actions)
         
+        # Calculate TD errors for prioritized replay
+        td_errors = Q_targets - Q_expected
+        
         # Compute loss
         loss = F.smooth_l1_loss(Q_expected, Q_targets)  # Using Huber loss instead of MSE
         
@@ -141,6 +187,8 @@ class DQNAgent:
         
         # Update epsilon
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+        
+        return td_errors.squeeze()
     
     def soft_update(self):
         """Soft update model parameters: θ_target = τ*θ_local + (1 - τ)*θ_target"""
@@ -148,8 +196,23 @@ class DQNAgent:
             target_param.data.copy_(self.tau * policy_param.data + (1.0 - self.tau) * target_param.data)
     
     def save(self, filename):
-        torch.save(self.policy_net.state_dict(), filename)
+        torch.save({
+            'policy_net_state_dict': self.policy_net.state_dict(),
+            'target_net_state_dict': self.target_net.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': self.scheduler.state_dict(),
+            'epsilon': self.epsilon
+        }, filename)
     
     def load(self, filename):
-        self.policy_net.load_state_dict(torch.load(filename))
-        self.target_net.load_state_dict(self.policy_net.state_dict()) 
+        checkpoint = torch.load(filename)
+        self.policy_net.load_state_dict(checkpoint['policy_net_state_dict'])
+        self.target_net.load_state_dict(checkpoint['target_net_state_dict'])
+        
+        # Load optimizer and scheduler if they exist in the checkpoint
+        if 'optimizer_state_dict' in checkpoint:
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if 'scheduler_state_dict' in checkpoint:
+            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        if 'epsilon' in checkpoint:
+            self.epsilon = checkpoint['epsilon'] 

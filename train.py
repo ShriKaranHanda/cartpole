@@ -7,7 +7,8 @@ import argparse
 import os
 
 def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500, 
-              print_every=100, goal_score=475.0, consecutive_solves=100):
+              print_every=100, goal_score=475.0, consecutive_solves=100,
+              save_checkpoint_every=500):
     """Train DQN agent on specified environment.
     
     Args:
@@ -17,6 +18,7 @@ def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500,
         print_every (int): Print stats every this many episodes
         goal_score (float): Goal score (475.0 for CartPole-v1)
         consecutive_solves (int): Number of consecutive episodes to average for solving
+        save_checkpoint_every (int): Save checkpoint models every this many episodes
     """
     env = gym.make(env_name)
     
@@ -31,6 +33,11 @@ def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500,
     scores = []
     scores_window = []  # last consecutive_solves scores
     best_avg_score = -float('inf')
+    best_avg_score_episode = 0  # Episode when best score was achieved
+    
+    # Create directory for models if it doesn't exist
+    if not os.path.exists('models'):
+        os.makedirs('models')
     
     for i_episode in range(1, num_episodes+1):
         state, _ = env.reset()
@@ -71,39 +78,46 @@ def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500,
         # Calculate current average score
         avg_score = np.mean(scores_window)
         
+        # Save checkpoints periodically to prevent losing progress
+        if i_episode % save_checkpoint_every == 0:
+            checkpoint_path = f'models/{env_name}_dqn_checkpoint_{i_episode}.pth'
+            agent.save(checkpoint_path)
+            print(f'Checkpoint saved at episode {i_episode}')
+        
         # Print progress and save best model every print_every episodes
         if i_episode % print_every == 0:
-            print(f'Episode {i_episode}\tAverage Score: {avg_score:.2f}\tEpsilon: {agent.epsilon:.2f}')
+            current_lr = agent.optimizer.param_groups[0]['lr']
+            print(f'Episode {i_episode}\tAverage Score: {avg_score:.2f}\tEpsilon: {agent.epsilon:.2f}\tLR: {current_lr:.6f}')
             
             # Save model if we have a new best average score
             if avg_score > best_avg_score:
                 best_avg_score = avg_score
-                if not os.path.exists('models'):
-                    os.makedirs('models')
-                agent.save(f'models/{env_name}_dqn.pth')
+                best_avg_score_episode = i_episode
+                agent.save(f'models/{env_name}_dqn_best.pth')
                 print(f'New best model saved with average score: {best_avg_score:.2f}')
+                
+                # If we've gotten close to solving but not quite there, save a special checkpoint
+                if best_avg_score > goal_score * 0.9:
+                    agent.save(f'models/{env_name}_dqn_near_solved_{i_episode}.pth')
         
         # Check if environment solved
         if avg_score >= goal_score and len(scores_window) >= consecutive_solves:
             print(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score: {avg_score:.2f}')
             
             # Save the final trained model
-            if not os.path.exists('models'):
-                os.makedirs('models')
             agent.save(f'models/{env_name}_dqn_solved.pth')
             break
     
     # If we reach max episodes without solving, save the final model
     if i_episode >= num_episodes:
-        print(f'\nReached max episodes without solving. Best average score: {best_avg_score:.2f}')
+        print(f'\nReached max episodes without solving.')
+        print(f'Best average score: {best_avg_score:.2f} at episode {best_avg_score_episode}')
         print(f'Final average score: {avg_score:.2f}')
         
         # Save the final trained model
-        if not os.path.exists('models'):
-            os.makedirs('models')
         agent.save(f'models/{env_name}_dqn_final.pth')
     
-    return scores, agent
+    return scores, agent, best_avg_score_episode
 
 def plot_scores(scores, title="DQN Training"):
     """Plot the scores."""
@@ -144,15 +158,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train DQN agent on CartPole')
     parser.add_argument('--train', action='store_true', help='Train the agent')
     parser.add_argument('--test', action='store_true', help='Test the agent')
-    parser.add_argument('--model_path', type=str, default='models/CartPole-v1_dqn.pth', help='Path to model to load for testing')
+    parser.add_argument('--model_path', type=str, default='models/CartPole-v1_dqn_best.pth', help='Path to model to load for testing')
     args = parser.parse_args()
     
     # Create models directory if it doesn't exist
     os.makedirs('models', exist_ok=True)
     
     if args.train:
-        scores, agent = train_dqn()
+        scores, agent, best_episode = train_dqn()
         plot_scores(scores)
+        print(f"For testing, use the best model: python train.py --test --model_path models/CartPole-v1_dqn_best.pth")
         
     if args.test:
         # Check if model file exists
