@@ -13,38 +13,14 @@ Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'
 class ReplayBuffer:
     def __init__(self, capacity):
         self.memory = deque(maxlen=capacity)
-        self.priorities = deque(maxlen=capacity)
-        self.max_priority = 1.0
+        # Simplified - removed priorities for speed
     
     def push(self, *args):
         self.memory.append(Transition(*args))
-        self.priorities.append(self.max_priority)  # New experiences get max priority
     
-    def sample(self, batch_size, alpha=0.6):
-        """Sample with prioritization. Alpha determines how much prioritization is used."""
-        if len(self.memory) == len(self.priorities):
-            # Convert priorities to probabilities
-            probs = np.array(self.priorities) ** alpha
-            probs /= np.sum(probs)
-            
-            # Sample based on priorities
-            indices = np.random.choice(len(self.memory), batch_size, p=probs, replace=False)
-            experiences = [self.memory[i] for i in indices]
-            return experiences, indices
-        else:
-            # Fallback to random sampling if priorities don't match memory
-            indices = random.sample(range(len(self.memory)), batch_size)
-            experiences = [self.memory[i] for i in indices]
-            return experiences, indices
-    
-    def update_priorities(self, indices, errors, epsilon=0.01):
-        """Update priorities based on TD errors"""
-        for i, error in zip(indices, errors):
-            if i < len(self.priorities):  # Safety check
-                # Convert TD error to priority (add epsilon to ensure non-zero probability)
-                priority = abs(error) + epsilon
-                self.priorities[i] = priority
-                self.max_priority = max(self.max_priority, priority)
+    def sample(self, batch_size):
+        # Simple random sampling - much faster
+        return random.sample(self.memory, batch_size)
     
     def __len__(self):
         return len(self.memory)
@@ -54,20 +30,17 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size // 2)
-        self.fc4 = nn.Linear(hidden_size // 2, action_size)
+        self.fc3 = nn.Linear(hidden_size, action_size)
         
         # Initialize weights with Xavier/Glorot initialization
         nn.init.xavier_uniform_(self.fc1.weight)
         nn.init.xavier_uniform_(self.fc2.weight)
         nn.init.xavier_uniform_(self.fc3.weight)
-        nn.init.xavier_uniform_(self.fc4.weight)
     
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        return self.fc4(x)
+        return self.fc3(x)
 
 class DQNAgent:
     def __init__(self, state_size, action_size, 
@@ -119,17 +92,13 @@ class DQNAgent:
         # Learn every update_every time steps
         self.t_step = (self.t_step + 1) % self.update_every
         if self.t_step == 0 and len(self.memory) > self.batch_size:
-            experiences, indices = self.memory.sample(self.batch_size)
-            td_errors = self.learn(experiences)
-            # Update experience priorities
-            self.memory.update_priorities(indices, td_errors.detach().numpy())
+            experiences = self.memory.sample(self.batch_size)
+            self.learn(experiences)
         
         self.episode_step += 1
         if done:
             # Reset episode step counter
             self.episode_step = 0
-            # Decay learning rate
-            self.scheduler.step()
     
     def act(self, state, eval_mode=False):
         state = torch.from_numpy(state).float().unsqueeze(0)
@@ -169,9 +138,6 @@ class DQNAgent:
         # Get expected Q values from policy model
         Q_expected = self.policy_net(states).gather(1, actions)
         
-        # Calculate TD errors for prioritized replay
-        td_errors = Q_targets - Q_expected
-        
         # Compute loss
         loss = F.smooth_l1_loss(Q_expected, Q_targets)  # Using Huber loss instead of MSE
         
@@ -182,13 +148,14 @@ class DQNAgent:
         torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0)
         self.optimizer.step()
         
+        # Update learning rate - moved after optimizer step to fix warning
+        self.scheduler.step()
+        
         # Update target network
         self.soft_update()
         
         # Update epsilon
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
-        
-        return td_errors.squeeze()
     
     def soft_update(self):
         """Soft update model parameters: θ_target = τ*θ_local + (1 - τ)*θ_target"""

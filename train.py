@@ -5,10 +5,12 @@ import matplotlib.pyplot as plt
 from dqn_agent import DQNAgent
 import argparse
 import os
+import time
+from datetime import timedelta
 
-def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500, 
+def train_dqn(env_name='CartPole-v1', num_episodes=3000, max_t=500, 
               print_every=100, goal_score=475.0, consecutive_solves=100,
-              save_checkpoint_every=500):
+              save_checkpoint_every=500, resume_from=None, starting_episode=1):
     """Train DQN agent on specified environment.
     
     Args:
@@ -19,7 +21,12 @@ def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500,
         goal_score (float): Goal score (475.0 for CartPole-v1)
         consecutive_solves (int): Number of consecutive episodes to average for solving
         save_checkpoint_every (int): Save checkpoint models every this many episodes
+        resume_from (str): Path to a model file to resume training from
+        starting_episode (int): Episode number to start counting from when resuming
     """
+    # Start time tracking
+    start_time = time.time()
+    
     env = gym.make(env_name)
     
     # Get environment information
@@ -28,6 +35,11 @@ def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500,
     
     # Create agent
     agent = DQNAgent(state_size=state_size, action_size=action_size)
+    
+    # Resume from checkpoint if specified
+    if resume_from and os.path.isfile(resume_from):
+        print(f"Resuming training from {resume_from} at episode {starting_episode}")
+        agent.load(resume_from)
     
     # Training loop
     scores = []
@@ -39,7 +51,8 @@ def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500,
     if not os.path.exists('models'):
         os.makedirs('models')
     
-    for i_episode in range(1, num_episodes+1):
+    for i_episode in range(starting_episode, starting_episode + num_episodes):
+        episode_start_time = time.time()
         state, _ = env.reset()
         score = 0
         
@@ -78,6 +91,13 @@ def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500,
         # Calculate current average score
         avg_score = np.mean(scores_window)
         
+        # Calculate elapsed time
+        elapsed = time.time() - start_time
+        elapsed_str = str(timedelta(seconds=int(elapsed)))
+        
+        # Calculate episode time
+        episode_time = time.time() - episode_start_time
+        
         # Save checkpoints periodically to prevent losing progress
         if i_episode % save_checkpoint_every == 0:
             checkpoint_path = f'models/{env_name}_dqn_checkpoint_{i_episode}.pth'
@@ -87,7 +107,7 @@ def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500,
         # Print progress and save best model every print_every episodes
         if i_episode % print_every == 0:
             current_lr = agent.optimizer.param_groups[0]['lr']
-            print(f'Episode {i_episode}\tAverage Score: {avg_score:.2f}\tEpsilon: {agent.epsilon:.2f}\tLR: {current_lr:.6f}')
+            print(f'Episode {i_episode}\tScore: {score:.2f}\tAvg Score: {avg_score:.2f}\tEpsilon: {agent.epsilon:.2f}\tLR: {current_lr:.6f}\tTime: {elapsed_str}\tEps Time: {episode_time:.3f}s')
             
             # Save model if we have a new best average score
             if avg_score > best_avg_score:
@@ -102,15 +122,19 @@ def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500,
         
         # Check if environment solved
         if avg_score >= goal_score and len(scores_window) >= consecutive_solves:
-            print(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score: {avg_score:.2f}')
+            elapsed = time.time() - start_time
+            elapsed_str = str(timedelta(seconds=int(elapsed)))
+            print(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score: {avg_score:.2f}\tTotal Time: {elapsed_str}')
             
             # Save the final trained model
             agent.save(f'models/{env_name}_dqn_solved.pth')
             break
     
     # If we reach max episodes without solving, save the final model
-    if i_episode >= num_episodes:
-        print(f'\nReached max episodes without solving.')
+    if i_episode >= starting_episode + num_episodes - 1:
+        elapsed = time.time() - start_time
+        elapsed_str = str(timedelta(seconds=int(elapsed)))
+        print(f'\nReached max episodes without solving. Total Time: {elapsed_str}')
         print(f'Best average score: {best_avg_score:.2f} at episode {best_avg_score_episode}')
         print(f'Final average score: {avg_score:.2f}')
         
@@ -159,13 +183,31 @@ if __name__ == '__main__':
     parser.add_argument('--train', action='store_true', help='Train the agent')
     parser.add_argument('--test', action='store_true', help='Test the agent')
     parser.add_argument('--model_path', type=str, default='models/CartPole-v1_dqn_best.pth', help='Path to model to load for testing')
+    parser.add_argument('--resume', action='store_true', help='Resume training from a checkpoint')
+    parser.add_argument('--resume_from', type=str, default='models/CartPole-v1_dqn_best.pth', help='Path to model to resume training from')
+    parser.add_argument('--start_episode', type=int, default=1701, help='Episode to start from when resuming')
+    parser.add_argument('--num_episodes', type=int, default=1000, help='Number of episodes to train for')
     args = parser.parse_args()
     
     # Create models directory if it doesn't exist
     os.makedirs('models', exist_ok=True)
     
     if args.train:
-        scores, agent, best_episode = train_dqn()
+        if args.resume:
+            # Check if model file exists
+            if not os.path.isfile(args.resume_from):
+                print(f"Model file '{args.resume_from}' not found.")
+                print("Please specify a valid model path.")
+                exit(1)
+            
+            scores, agent, best_episode = train_dqn(
+                resume_from=args.resume_from, 
+                starting_episode=args.start_episode,
+                num_episodes=args.num_episodes
+            )
+        else:
+            scores, agent, best_episode = train_dqn(num_episodes=args.num_episodes)
+        
         plot_scores(scores)
         print(f"For testing, use the best model: python train.py --test --model_path models/CartPole-v1_dqn_best.pth")
         
