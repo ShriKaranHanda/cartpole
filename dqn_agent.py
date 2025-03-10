@@ -23,27 +23,35 @@ class ReplayBuffer:
         return len(self.memory)
 
 class DQN(nn.Module):
-    def __init__(self, state_size, action_size, hidden_size=64):
+    def __init__(self, state_size, action_size, hidden_size=128):
         super(DQN, self).__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, action_size)
+        self.fc3 = nn.Linear(hidden_size, hidden_size // 2)
+        self.fc4 = nn.Linear(hidden_size // 2, action_size)
+        
+        # Initialize weights with Xavier/Glorot initialization
+        nn.init.xavier_uniform_(self.fc1.weight)
+        nn.init.xavier_uniform_(self.fc2.weight)
+        nn.init.xavier_uniform_(self.fc3.weight)
+        nn.init.xavier_uniform_(self.fc4.weight)
     
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        return self.fc3(x)
+        x = F.relu(self.fc3(x))
+        return self.fc4(x)
 
 class DQNAgent:
     def __init__(self, state_size, action_size, 
-                 buffer_size=10000, 
-                 batch_size=64, 
-                 gamma=0.99, 
-                 lr=0.001,
+                 buffer_size=100000,
+                 batch_size=128,
+                 gamma=0.99,
+                 lr=0.0003,
                  epsilon_start=1.0,
                  epsilon_end=0.01,
-                 epsilon_decay=0.995,
-                 tau=1e-3,
+                 epsilon_decay=0.997,  # Slower decay
+                 tau=0.001,
                  update_every=4):
         
         self.state_size = state_size
@@ -64,7 +72,7 @@ class DQNAgent:
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()  # Set target network to evaluation mode
         
-        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr, weight_decay=1e-5)  # Added weight decay
         self.memory = ReplayBuffer(buffer_size)
         
         # Initialize step counter
@@ -103,21 +111,29 @@ class DQNAgent:
         next_states = torch.from_numpy(np.vstack([e.next_state for e in experiences])).float()
         dones = torch.from_numpy(np.vstack([e.done for e in experiences]).astype(np.uint8)).float()
         
-        # Get expected Q values from policy model
-        Q_expected = self.policy_net(states).gather(1, actions)
-        
-        # Get max predicted Q values for next states from target model
-        Q_targets_next = self.target_net(next_states).detach().max(1)[0].unsqueeze(1)
+        # Double DQN implementation
+        # Get argmax actions from policy network
+        with torch.no_grad():
+            # Get the actions that would be selected by the policy network
+            policy_next_actions = self.policy_net(next_states).max(1)[1].unsqueeze(1)
+            
+            # Get the Q-values for these actions from the target network
+            Q_targets_next = self.target_net(next_states).gather(1, policy_next_actions)
         
         # Compute Q targets for current states
         Q_targets = rewards + (self.gamma * Q_targets_next * (1 - dones))
         
+        # Get expected Q values from policy model
+        Q_expected = self.policy_net(states).gather(1, actions)
+        
         # Compute loss
-        loss = F.mse_loss(Q_expected, Q_targets)
+        loss = F.smooth_l1_loss(Q_expected, Q_targets)  # Using Huber loss instead of MSE
         
         # Minimize the loss
         self.optimizer.zero_grad()
         loss.backward()
+        # Gradient clipping to prevent exploding gradients
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0)
         self.optimizer.step()
         
         # Update target network

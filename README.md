@@ -4,7 +4,7 @@ A Deep Q-Network (DQN) implementation to solve the CartPole problem from OpenAI 
 
 ## About CartPole
 
-CartPole is a classic control problem in reinforcement learning. The goal is to balance a pole attached to a movable cart by applying forces to the left or right. The environment is considered solved when the agent achieves an average score of 195 over 100 consecutive episodes.
+CartPole is a classic control problem in reinforcement learning. The goal is to balance a pole attached to a movable cart by applying forces to the left or right. The environment is considered solved when the agent achieves an average score of 475 over 100 consecutive episodes in CartPole-v1.
 
 State space: 4-dimensional (cart position, cart velocity, pole angle, pole angular velocity)
 Action space: 2 actions (push cart left or right)

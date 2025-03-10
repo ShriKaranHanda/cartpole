@@ -6,16 +6,16 @@ from dqn_agent import DQNAgent
 import argparse
 import os
 
-def train_dqn(env_name='CartPole-v1', num_episodes=1000, max_t=1000, 
-              print_every=100, goal_score=195.0, consecutive_solves=100):
+def train_dqn(env_name='CartPole-v1', num_episodes=5000, max_t=500, 
+              print_every=100, goal_score=475.0, consecutive_solves=100):
     """Train DQN agent on specified environment.
     
     Args:
         env_name (str): Gym environment name
         num_episodes (int): Maximum number of training episodes
-        max_t (int): Maximum number of timesteps per episode
+        max_t (int): Maximum number of timesteps per episode (500 for CartPole-v1)
         print_every (int): Print stats every this many episodes
-        goal_score (float): Goal score (avg over consecutive_solves)
+        goal_score (float): Goal score (475.0 for CartPole-v1)
         consecutive_solves (int): Number of consecutive episodes to average for solving
     """
     env = gym.make(env_name)
@@ -44,12 +44,18 @@ def train_dqn(env_name='CartPole-v1', num_episodes=1000, max_t=1000,
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
             
+            # Custom reward to encourage pole balancing
+            # Penalize more for early termination
+            modified_reward = reward
+            if done and t < max_t - 1:
+                modified_reward = -1.0  # Penalty for falling
+            
             # Process step
-            agent.step(state, action, reward, next_state, done)
+            agent.step(state, action, modified_reward, next_state, done)
             
             # Update state and score
             state = next_state
-            score += reward
+            score += reward  # Still use original reward for scoring
             
             if done:
                 break
@@ -65,18 +71,17 @@ def train_dqn(env_name='CartPole-v1', num_episodes=1000, max_t=1000,
         # Calculate current average score
         avg_score = np.mean(scores_window)
         
-        # Save model if we have a new best average score
-        if avg_score > best_avg_score:
-            best_avg_score = avg_score
-            # Save the trained model
-            if not os.path.exists('models'):
-                os.makedirs('models')
-            agent.save(f'models/{env_name}_dqn.pth')
-            print(f'New best model saved with average score: {best_avg_score:.2f}')
-        
-        # Print progress
+        # Print progress and save best model every print_every episodes
         if i_episode % print_every == 0:
             print(f'Episode {i_episode}\tAverage Score: {avg_score:.2f}\tEpsilon: {agent.epsilon:.2f}')
+            
+            # Save model if we have a new best average score
+            if avg_score > best_avg_score:
+                best_avg_score = avg_score
+                if not os.path.exists('models'):
+                    os.makedirs('models')
+                agent.save(f'models/{env_name}_dqn.pth')
+                print(f'New best model saved with average score: {best_avg_score:.2f}')
         
         # Check if environment solved
         if avg_score >= goal_score and len(scores_window) >= consecutive_solves:
@@ -115,7 +120,7 @@ def plot_scores(scores, title="DQN Training"):
     plt.savefig('plots/training_scores.png')
     plt.show()
 
-def test_agent(agent, env_name='CartPole-v1', n_episodes=10, max_t=1000):
+def test_agent(agent, env_name='CartPole-v1', n_episodes=10, max_t=500):
     """Test the trained agent."""
     env = gym.make(env_name, render_mode='human')
     
