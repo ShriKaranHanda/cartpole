@@ -40,7 +40,7 @@ HIDDEN_SIZE = 128
 BUFFER_SIZE = 10000
 BATCH_SIZE = 64
 GAMMA = 0.99
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 EPSILON = 1.0
 EPSILON_DECAY = 0.995
 EPSILON_MIN = 0.01
@@ -194,15 +194,40 @@ def train_dqn(agent, env, num_episodes=500, max_steps=500, batch_size=64, succes
     scores = []
     losses = []
     epsilon_values = []
+    episode_steps = []
+    
+    # For tracking additional metrics
+    total_steps = 0
+    action_counts = [0] * agent.action_size
+    
+    # Log initial weights
+    if writer is not None:
+        for name, param in agent.policy_net.named_parameters():
+            writer.add_histogram(f"initial_weights/{name}", param.data, 0)
     
     for episode in range(num_episodes):
         state, _ = env.reset()
         score = 0
         episode_losses = []
+        episode_q_values = []
+        episode_td_errors = []
+        episode_actions = []
+        episode_states = []
+        steps = 0
         
         for t in range(max_steps):
             # Select and perform an action
+            state_tensor = torch.FloatTensor(state).unsqueeze(0)
+            
+            # Get Q-values before action selection for logging
+            with torch.no_grad():
+                q_values = agent.policy_net(state_tensor)[0].detach().numpy()
+                episode_q_values.append(q_values)
+            
             action = agent.select_action(state)
+            episode_actions.append(action)
+            action_counts[action] += 1
+            
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
             
@@ -214,8 +239,23 @@ def train_dqn(agent, env, num_episodes=500, max_steps=500, batch_size=64, succes
             if loss > 0:
                 episode_losses.append(loss)
             
+            # Store state for distribution logging
+            episode_states.append(state)
+            
+            # Calculate TD error for this step (if we have enough samples)
+            if len(agent.memory) >= batch_size:
+                with torch.no_grad():
+                    current_q = agent.policy_net(state_tensor).gather(1, torch.tensor([[action]])).item()
+                    next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
+                    next_q = agent.target_net(next_state_tensor).max(1)[0].item()
+                    target_q = reward + (1 - int(done)) * agent.gamma * next_q
+                    td_error = abs(current_q - target_q)
+                    episode_td_errors.append(td_error)
+            
             state = next_state
             score += reward
+            steps += 1
+            total_steps += 1
             
             if done:
                 break
@@ -225,16 +265,67 @@ def train_dqn(agent, env, num_episodes=500, max_steps=500, batch_size=64, succes
         scores.append(score)
         losses.append(avg_loss)
         epsilon_values.append(agent.epsilon)
+        episode_steps.append(steps)
         
         # Calculate running average
         avg_100 = np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores)
         
         # Log to TensorBoard if writer is provided
         if writer is not None:
+            # Basic metrics (already being logged)
             writer.add_scalar("Score", score, episode)
             writer.add_scalar("Avg_Loss", avg_loss, episode)
             writer.add_scalar("Epsilon", agent.epsilon, episode)
             writer.add_scalar("Avg_100_Score", avg_100, episode)
+            
+            # New metrics
+            writer.add_scalar("Episode_Length", steps, episode)
+            
+            # Log Q-value statistics if we have any
+            if episode_q_values:
+                q_values_array = np.array(episode_q_values)
+                for action_idx in range(agent.action_size):
+                    writer.add_scalar(f"Q_Values/Action_{action_idx}_Mean", 
+                                     np.mean(q_values_array[:, action_idx]), episode)
+                    writer.add_scalar(f"Q_Values/Action_{action_idx}_Max", 
+                                     np.max(q_values_array[:, action_idx]), episode)
+                writer.add_scalar("Q_Values/Mean", np.mean(q_values_array), episode)
+                writer.add_scalar("Q_Values/Max", np.max(q_values_array), episode)
+                
+                # Log Q-value distributions periodically (every 10 episodes to avoid too much data)
+                if episode % 10 == 0:
+                    for action_idx in range(agent.action_size):
+                        writer.add_histogram(f"Q_Value_Distribution/Action_{action_idx}", 
+                                           q_values_array[:, action_idx], episode)
+            
+            # Log TD errors
+            if episode_td_errors:
+                writer.add_scalar("TD_Error/Mean", np.mean(episode_td_errors), episode)
+                writer.add_scalar("TD_Error/Max", np.max(episode_td_errors), episode)
+                
+                # Log TD error distribution periodically
+                if episode % 10 == 0:
+                    writer.add_histogram("TD_Error_Distribution", np.array(episode_td_errors), episode)
+            
+            # Log action distribution for this episode
+            if episode_actions:
+                writer.add_histogram("Action_Distribution", np.array(episode_actions), episode)
+                for action_idx in range(agent.action_size):
+                    action_pct = episode_actions.count(action_idx) / len(episode_actions) if episode_actions else 0
+                    writer.add_scalar(f"Action_Freq/Action_{action_idx}", action_pct, episode)
+            
+            # Log state distributions periodically
+            if episode % 10 == 0 and episode_states:
+                states_array = np.array(episode_states)
+                for i in range(agent.state_size):
+                    writer.add_histogram(f"State_Distribution/State_{i}", states_array[:, i], episode)
+            
+            # Log weights and gradients periodically
+            if episode % 20 == 0:
+                for name, param in agent.policy_net.named_parameters():
+                    writer.add_histogram(f"weights/{name}", param.data, episode)
+                    if param.grad is not None:
+                        writer.add_histogram(f"gradients/{name}", param.grad, episode)
         
         if episode % 10 == 0:
             log(f"Episode {episode}: Score = {score}, Avg Loss = {avg_loss:.4f}, Epsilon = {agent.epsilon:.4f}, Avg100 = {avg_100:.2f}")
@@ -248,8 +339,24 @@ def train_dqn(agent, env, num_episodes=500, max_steps=500, batch_size=64, succes
             if writer is not None:
                 writer.add_scalar("Final_Avg_100", avg_100, 0)
                 writer.add_scalar("Episodes_to_Solve", episode, 0)
+                
+                # Final action distribution across all episodes
+                for action_idx in range(agent.action_size):
+                    writer.add_scalar(f"Final_Action_Distribution/Action_{action_idx}", 
+                                     action_counts[action_idx] / total_steps, 0)
             
             break
+    
+    # Log final training statistics
+    if writer is not None:
+        # Add histograms for episode-level metrics
+        writer.add_histogram("Training_Stats/Episode_Scores", np.array(scores), 0)
+        writer.add_histogram("Training_Stats/Episode_Lengths", np.array(episode_steps), 0)
+        writer.add_histogram("Training_Stats/Episode_Losses", np.array(losses), 0)
+        
+        # Final weight distributions
+        for name, param in agent.policy_net.named_parameters():
+            writer.add_histogram(f"final_weights/{name}", param.data, 0)
     
     return scores, losses, epsilon_values
 
@@ -299,35 +406,6 @@ def main(args):
     writer = SummaryWriter(f"runs/{run_name}")
     log(f"TensorBoard logs will be saved to runs/{run_name}")
     
-    # Log hyperparameters
-    hparam_dict = {
-        "hidden_size": HIDDEN_SIZE,
-        "buffer_size": BUFFER_SIZE,
-        "batch_size": BATCH_SIZE,
-        "gamma": GAMMA,
-        "learning_rate": LEARNING_RATE,
-        "epsilon_decay": EPSILON_DECAY,
-        "target_update": TARGET_UPDATE,
-        "seed": SEED,
-        "episodes": args.episodes,
-        "threshold": args.threshold
-    }
-    metric_dict = {"final_avg_100": 0}  # Will be updated later
-    writer.add_hparams(hparam_dict, metric_dict)
-    
-    log(f"Initializing DQN agent with hyperparameters:")
-    log(f"  - Hidden layer size: {HIDDEN_SIZE}")
-    log(f"  - Experience buffer size: {BUFFER_SIZE}")
-    log(f"  - Batch size: {BATCH_SIZE}")
-    log(f"  - Discount factor (gamma): {GAMMA}")
-    log(f"  - Learning rate: {LEARNING_RATE}")
-    log(f"  - Initial epsilon: {EPSILON}")
-    log(f"  - Epsilon decay: {EPSILON_DECAY}")
-    log(f"  - Minimum epsilon: {EPSILON_MIN}")
-    log(f"  - Target network update frequency: {TARGET_UPDATE}")
-    log(f"  - Number of episodes: {args.episodes}")
-    log(f"  - Success threshold: {args.threshold}")
-    
     # Initialize the agent
     agent = DQNAgent(
         state_size=state_size,
@@ -342,6 +420,42 @@ def main(args):
         epsilon_min=EPSILON_MIN,
         update_target_every=TARGET_UPDATE
     )
+    
+    # Log hyperparameters - more comprehensive dictionary
+    hparam_dict = {
+        "hidden_size": HIDDEN_SIZE,
+        "buffer_size": BUFFER_SIZE,
+        "batch_size": BATCH_SIZE,
+        "gamma": GAMMA,
+        "learning_rate": LEARNING_RATE,
+        "initial_epsilon": EPSILON,
+        "epsilon_decay": EPSILON_DECAY,
+        "epsilon_min": EPSILON_MIN,
+        "target_update": TARGET_UPDATE,
+        "max_episodes": args.episodes,
+        "success_threshold": args.threshold,
+        "network_structure": "2-layer MLP",
+        "optimizer": "Adam",
+        "loss_function": "MSE",
+        "seed": SEED
+    }
+    
+    # We'll fill these metrics after training
+    metric_dict = {}
+    
+    # Print hyperparameters for logging
+    log(f"Initializing DQN agent with hyperparameters:")
+    log(f"  - Hidden layer size: {HIDDEN_SIZE}")
+    log(f"  - Experience buffer size: {BUFFER_SIZE}")
+    log(f"  - Batch size: {BATCH_SIZE}")
+    log(f"  - Discount factor (gamma): {GAMMA}")
+    log(f"  - Learning rate: {LEARNING_RATE}")
+    log(f"  - Initial epsilon: {EPSILON}")
+    log(f"  - Epsilon decay: {EPSILON_DECAY}")
+    log(f"  - Minimum epsilon: {EPSILON_MIN}")
+    log(f"  - Target network update frequency: {TARGET_UPDATE}")
+    log(f"  - Number of episodes: {args.episodes}")
+    log(f"  - Success threshold: {args.threshold}")
     
     # Try to log model graph
     try:
@@ -399,8 +513,39 @@ def main(args):
     # Evaluate the trained agent
     eval_score = evaluate_agent(agent, env, num_episodes=10)
     
-    # Update the final metric for hparams
-    metric_dict["final_avg_100"] = np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores)
+    # Calculate final metrics for hparams
+    final_avg_100 = np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores)
+    max_score = np.max(scores)
+    avg_score = np.mean(scores)
+    last_10_avg = np.mean(scores[-10:])
+    episodes_to_threshold = -1
+    
+    # Find episodes to reach threshold
+    for i in range(len(scores)):
+        if i >= 99:  # Need at least 100 episodes to compute avg100
+            avg100 = np.mean(scores[i-99:i+1])
+            if avg100 >= args.threshold:
+                episodes_to_threshold = i + 1
+                break
+    
+    # Create complete metrics dictionary for hparams visualization
+    metric_dict = {
+        "hparam/final_avg_100": final_avg_100,
+        "hparam/max_score": max_score, 
+        "hparam/avg_score": avg_score,
+        "hparam/last_10_avg": last_10_avg,
+        "hparam/eval_score": eval_score,
+        "hparam/episodes_to_threshold": episodes_to_threshold,
+        "hparam/training_time": training_time
+    }
+    
+    # Log all the metrics for comparing different runs
+    for metric_name, metric_value in metric_dict.items():
+        if metric_value != -1:  # Don't log -1 values (e.g., if threshold not reached)
+            writer.add_scalar(metric_name, metric_value, 0)
+    
+    # Log hyperparameters and associated metrics for the hparams dashboard
+    writer.add_hparams(hparam_dict, metric_dict)
     
     # Close the TensorBoard writer
     writer.close()
