@@ -1,0 +1,15 @@
+venv
+__pycache__
+*.aux
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.log
+*.out
+*.pdf
+*.toc
+*.bbl
+*.blg
+*.png
+*.pth
+*_log.txt
