@@ -47,7 +47,7 @@
 \maketitle
 
 \begin{abstract}
-This report presents a comprehensive study on solving the classic CartPole control problem using Deep Q-Networks (DQN), a reinforcement learning approach. I implement a DQN agent capable of learning to balance a pole on a moving cart by making sequential action decisions. The project explores various improvements to the basic DQN algorithm, including Double DQN implementation, reward shaping, and learning rate management. My final model achieves a high average score approaching the target threshold of 475 steps out of the maximum 500. I analyze the learning process, challenges, and strategies that led to my improved performance.
+This report presents a comprehensive study on solving the classic CartPole control problem using Deep Q-Networks (DQN), a reinforcement learning approach. We implement a DQN agent capable of learning to balance a pole on a moving cart by making sequential action decisions. The project explores various improvements to the basic DQN algorithm, including Double DQN implementation, reward shaping, and learning rate management. Our final model achieves a high average score approaching the target threshold of 475 steps out of the maximum 500. We analyze the learning process, challenges, and strategies that led to our improved performance.
 \end{abstract}
 
 \tableofcontents
@@ -57,9 +57,9 @@ This report presents a comprehensive study on solving the classic CartPole contr
 
 Reinforcement learning (RL) is a paradigm where an agent learns to make decisions by taking actions in an environment to maximize cumulative rewards. Unlike supervised learning, RL does not require labeled data but instead learns through trial-and-error interactions with the environment. This approach has shown remarkable success in solving complex control problems, from games to robotic tasks.
 
-In this project, I address the CartPole balancing problem—a classic control task in RL literature—using Deep Q-Networks (DQN), a powerful value-based RL algorithm that combines Q-learning with deep neural networks. The CartPole problem serves as an excellent benchmark for testing RL algorithms due to its simple mechanics but challenging control requirements.
+In this project, we address the CartPole balancing problem—a classic control task in RL literature—using Deep Q-Networks (DQN), a powerful value-based RL algorithm that combines Q-learning with deep neural networks. The CartPole problem serves as an excellent benchmark for testing RL algorithms due to its simple mechanics but challenging control requirements.
 
-My study aims to:
+Our study aims to:
 \begin{itemize}
     \item Implement a DQN agent for the CartPole environment
     \item Explore enhancements to the basic DQN algorithm
@@ -67,7 +67,7 @@ My study aims to:
     \item Overcome challenges like catastrophic forgetting and learning plateaus
 \end{itemize}
 
-The report details my methodology, implementation, experiments, and results, providing insights into both the theoretical foundations and practical considerations of applying DQN to solve control problems.
+The report details our methodology, implementation, experiments, and results, providing insights into both the theoretical foundations and practical considerations of applying DQN to solve control problems.
 
 \section{Problem Description}
 
@@ -110,7 +110,7 @@ Q-learning is a model-free reinforcement learning algorithm that learns the valu
 
 \subsubsection{Q-Learning Background}
 
-In Q-learning, I maintain a table of Q-values for each state-action pair. The optimal Q-function satisfies the Bellman equation:
+In Q-learning, we maintain a table of Q-values for each state-action pair. The optimal Q-function satisfies the Bellman equation:
 
 \begin{equation}
     Q^*(s,a) = \mathbb{E}_{s'} \left[ r + \gamma \max_{a'} Q^*(s',a') | s, a \right]
@@ -127,7 +127,7 @@ where:
 
 \subsubsection{Deep Q-Network Architecture}
 
-In DQN, I use a neural network to approximate the Q-function. The network takes the state as input and outputs Q-values for all possible actions. My architecture consists of:
+In DQN, we use a neural network to approximate the Q-function. The network takes the state as input and outputs Q-values for all possible actions. Our architecture consists of:
 
 \begin{itemize}
     \item Input layer: 4 nodes (state dimension)
@@ -138,19 +138,19 @@ In DQN, I use a neural network to approximate the Q-function. The network takes 
 
 \subsubsection{Key DQN Components}
 
-My implementation includes several critical components:
+Our implementation includes several critical components:
 
-\paragraph{Experience Replay} I store agent experiences (state, action, reward, next state, done) in a replay buffer and sample random batches during training. This breaks correlations between consecutive samples and improves learning stability.
+\paragraph{Experience Replay} We store agent experiences (state, action, reward, next state, done) in a replay buffer and sample random batches during training. This breaks correlations between consecutive samples and improves learning stability.
 
-\paragraph{Double DQN} I implement Double DQN to address the overestimation bias in standard DQN. The action selection and evaluation are decoupled:
+\paragraph{Double DQN} We implement Double DQN to address the overestimation bias in standard DQN. The action selection and evaluation are decoupled:
 \begin{itemize}
     \item Policy network selects the next action
     \item Target network evaluates the Q-value of that action
 \end{itemize}
 
-\paragraph{Target Network} I maintain a separate target network that is updated less frequently than the policy network, providing stable Q-value targets for learning.
+\paragraph{Target Network} We maintain a separate target network that is updated less frequently than the policy network, providing stable Q-value targets for learning.
 
-\paragraph{Epsilon-Greedy Exploration} I use an epsilon-greedy policy that balances exploration and exploitation:
+\paragraph{Epsilon-Greedy Exploration} We use an epsilon-greedy policy that balances exploration and exploitation:
 \begin{itemize}
     \item With probability $\epsilon$, choose a random action
     \item With probability $1-\epsilon$, choose the action with the highest Q-value
@@ -171,10 +171,10 @@ The project was implemented using:
 
 \subsection{DQN Agent Implementation}
 
-My agent implementation includes the following key components:
+Our agent implementation includes the following key components:
 
 \subsubsection{Replay Buffer}
-I implemented a simple replay buffer using a fixed-size deque:
+We implemented a simple replay buffer using a fixed-size deque:
 
 \begin{lstlisting}[language=Python, caption=Replay Buffer Implementation]
 class ReplayBuffer:
@@ -192,7 +192,7 @@ class ReplayBuffer:
 \end{lstlisting}
 
 \subsubsection{Neural Network Architecture}
-I implemented the Q-network using PyTorch:
+We implemented the Q-network using PyTorch:
 
 \begin{lstlisting}[language=Python, caption=DQN Network Architecture]
 class DQN(nn.Module):
@@ -214,7 +214,7 @@ class DQN(nn.Module):
 \end{lstlisting}
 
 \subsubsection{Double DQN Implementation}
-I implemented Double DQN in the learning process:
+We implemented Double DQN in the learning process:
 
 \begin{lstlisting}[language=Python, caption=Double DQN Implementation]
 # Double DQN implementation
@@ -231,7 +231,7 @@ Q_targets = rewards + (self.gamma * Q_targets_next * (1 - dones))
 \end{lstlisting}
 
 \subsubsection{Learning Rate Management}
-I implemented learning rate decay and reset functionality to address plateaus in learning:
+We implemented learning rate decay and reset functionality to address plateaus in learning:
 
 \begin{lstlisting}[language=Python, caption=Learning Rate Management]
 def reset_learning_rate(self, new_lr=None):
@@ -252,10 +252,10 @@ def reset_learning_rate(self, new_lr=None):
 
 \subsection{Training Approach}
 
-I implemented several specialized training approaches:
+We implemented several specialized training approaches:
 
 \subsubsection{Reward Shaping}
-I enhanced the reward structure to guide learning:
+We enhanced the reward structure to guide learning:
 
 \begin{lstlisting}[language=Python, caption=Reward Shaping]
 # Penalize early termination with progressive penalty
@@ -272,7 +272,7 @@ elif t > 200 and not done:
 \end{lstlisting}
 
 \subsubsection{Curriculum Learning}
-I implemented a simple form of curriculum learning:
+We implemented a simple form of curriculum learning:
 
 \begin{lstlisting}[language=Python, caption=Curriculum Learning]
 # Create curriculum difficulty - start with easier cases if struggling
@@ -286,7 +286,7 @@ if last_10_avg < 400 and len(scores_window) >= 10:
 
 \subsection{Hyperparameter Tuning}
 
-I experimented with various hyperparameters:
+We experimented with various hyperparameters:
 
 \begin{table}[H]
 \centering
@@ -309,7 +309,7 @@ Learning rate decay & 0.9999 & 0.9995 \\
 
 \subsection{Network Architecture Experiments}
 
-I experimented with different network architectures:
+We experimented with different network architectures:
 \begin{itemize}
     \item Single hidden layer with 64 neurons
     \item Two hidden layers with 64 neurons each
@@ -321,7 +321,7 @@ The final architecture with two hidden layers of 128 neurons each provided the b
 
 \subsection{Training Phases}
 
-My training process evolved through several phases:
+Our training process evolved through several phases:
 
 \subsubsection{Phase 1: Basic DQN}
 Initial implementation with standard DQN achieved mediocre performance, with scores plateauing around 100.
@@ -339,7 +339,7 @@ Created specialized training process with curriculum learning and adaptive rewar
 
 \subsection{Learning Curves}
 
-My training showed clear progress through different phases. The learning curves demonstrate:
+Our training showed clear progress through different phases. The learning curves demonstrate:
 
 \begin{itemize}
     \item Initial slow learning (0-300 episodes)
@@ -361,12 +361,12 @@ One critical finding was that learning rate decay could lead to premature conver
 
 \subsection{Final Performance}
 
-My best model achieved an average score of 428.68 over 100 consecutive episodes, approaching but not quite reaching the target score of 475. However, many individual episodes reached the maximum score of 500, demonstrating the agent's capability to solve the task completely under favorable conditions.
+Our best model achieved an average score of 428.68 over 100 consecutive episodes, approaching but not quite reaching the target score of 475. However, many individual episodes reached the maximum score of 500, demonstrating the agent's capability to solve the task completely under favorable conditions.
 
 \subsection{Challenges Encountered}
 
 \subsubsection{Catastrophic Forgetting}
-I observed that the agent would sometimes lose previously learned skills, with performance degrading after initial improvements. My solution included:
+We observed that the agent would sometimes lose previously learned skills, with performance degrading after initial improvements. Our solution included:
 \begin{itemize}
     \item Larger replay buffer (100,000 experiences)
     \item More stable target network updates
@@ -374,7 +374,7 @@ I observed that the agent would sometimes lose previously learned skills, with p
 \end{itemize}
 
 \subsubsection{Learning Plateaus}
-The agent frequently reached performance plateaus. I addressed this with:
+The agent frequently reached performance plateaus. We addressed this with:
 \begin{itemize}
     \item Learning rate resets
     \item Network fine-tuning with slight noise addition
@@ -385,7 +385,7 @@ The agent frequently reached performance plateaus. I addressed this with:
 
 \subsection{Analysis of Approach}
 
-My approach to solving the CartPole problem demonstrated both the strengths and limitations of DQN:
+Our approach to solving the CartPole problem demonstrated both the strengths and limitations of DQN:
 
 \paragraph{Strengths}
 \begin{itemize}
@@ -406,7 +406,7 @@ My approach to solving the CartPole problem demonstrated both the strengths and 
 Several opportunities for further improvement exist:
 
 \paragraph{Prioritized Experience Replay}
-Although I initially implemented prioritized experience replay, I removed it for speed. A more efficient implementation could provide benefits without the computational overhead.
+Although we initially implemented prioritized experience replay, we removed it for speed. A more efficient implementation could provide benefits without the computational overhead.
 
 \paragraph{Dueling Networks}
 Implementing a dueling network architecture could improve performance by separating state value and action advantage estimation.
@@ -416,9 +416,9 @@ Replacing epsilon-greedy exploration with noisy networks might provide more stru
 
 \section{Conclusion}
 
-In this project, I successfully implemented a Deep Q-Network agent for the CartPole problem, achieving scores approaching the environment's solving criteria of 475. My work demonstrated the effectiveness of various DQN enhancements, including Double DQN, adaptive reward shaping, and learning rate management.
+In this project, we successfully implemented a Deep Q-Network agent for the CartPole problem, achieving scores approaching the environment's solving criteria of 475. Our work demonstrated the effectiveness of various DQN enhancements, including Double DQN, adaptive reward shaping, and learning rate management.
 
-The results highlight both the power and challenges of deep reinforcement learning for control problems. While I was able to achieve high performance, the sensitivity to hyperparameters and the need for careful management of the learning process underscore the complexity of applying these methods in practice.
+The results highlight both the power and challenges of deep reinforcement learning for control problems. While we were able to achieve high performance, the sensitivity to hyperparameters and the need for careful management of the learning process underscore the complexity of applying these methods in practice.
 
 Key takeaways from this project include:
 
