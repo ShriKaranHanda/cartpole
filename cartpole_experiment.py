@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import time
 import os
 from cartpole_rl import DQNetwork, ReplayBuffer, log
+from torch.utils.tensorboard import SummaryWriter
 
 # Script name for logging
 SCRIPT_NAME = "experiment"
@@ -23,6 +24,11 @@ SUCCESS_THRESHOLD = 487.5
 # Generate different seeds for each experiment to ensure diversity
 BASE_SEED = int(time.time()) % 10000
 experiment_log(f"Base seed for experiments: {BASE_SEED}")
+
+# Create a runs directory for TensorBoard logs if it doesn't exist
+if not os.path.exists("runs"):
+    os.makedirs("runs")
+    experiment_log("Created directory for TensorBoard logs at 'runs/'")
 
 # Hyperparameter sets to experiment with
 experiment_configs = [
@@ -170,6 +176,29 @@ def train_experiment(config, max_episodes=200, max_steps=500):
     # Initialize the agent
     agent = DQNAgentExperiment(state_size, action_size, config)
     
+    # Create a TensorBoard writer for this experiment
+    writer = SummaryWriter(f"runs/cartpole_{config['name']}_seed{seed}")
+    
+    # Log hyperparameters to TensorBoard
+    writer.add_text("hyperparams", str(config))
+    hparam_dict = {
+        "hidden_size": config["hidden_size"],
+        "learning_rate": config["learning_rate"],
+        "gamma": config["gamma"],
+        "epsilon_decay": config["epsilon_decay"],
+        "batch_size": config["batch_size"],
+        "target_update": config["target_update"]
+    }
+    metric_dict = {"final_avg_100": 0}  # Will be updated later
+    writer.add_hparams(hparam_dict, metric_dict)
+    
+    # Try to log model graph
+    try:
+        dummy_input = torch.zeros((1, state_size))
+        writer.add_graph(agent.policy_net, dummy_input)
+    except Exception as e:
+        experiment_log(f"Couldn't add model graph to TensorBoard: {e}")
+    
     # Training loop
     scores = []
     losses = []
@@ -210,17 +239,37 @@ def train_experiment(config, max_episodes=200, max_steps=500):
         losses.append(avg_loss)
         epsilon_values.append(agent.epsilon)
         
+        # Log to TensorBoard
+        writer.add_scalar("Score", score, episode)
+        writer.add_scalar("Avg_Loss", avg_loss, episode)
+        writer.add_scalar("Epsilon", agent.epsilon, episode)
+        
+        # Calculate running average
+        avg_100 = np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores)
+        writer.add_scalar("Avg_100_Score", avg_100, episode)
+        
         if episode % 10 == 0:
             experiment_log(f"Experiment {config['name']} - Episode {episode}: Score = {score}, Avg Loss = {avg_loss:.4f}, Epsilon = {agent.epsilon:.4f}")
         
         # Check if the environment is solved - using the updated threshold
-        if len(scores) >= 100 and np.mean(scores[-100:]) >= SUCCESS_THRESHOLD and solved_episode == -1:
+        if len(scores) >= 100 and avg_100 >= SUCCESS_THRESHOLD and solved_episode == -1:
             solved_episode = episode
-            experiment_log(f"Experiment {config['name']} - Environment solved in {episode} episodes with average score of {np.mean(scores[-100:]):.2f}!")
+            experiment_log(f"Experiment {config['name']} - Environment solved in {episode} episodes with average score of {avg_100:.2f}!")
             experiment_log(f"Success threshold was {SUCCESS_THRESHOLD}")
     
     training_time = time.time() - start_time
     experiment_log(f"Experiment {config['name']} completed in {training_time:.2f} seconds")
+    
+    # Update the final metric for hparams
+    final_avg_100 = np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores)
+    metric_dict["final_avg_100"] = final_avg_100
+    
+    # Log final metrics
+    writer.add_scalar("Final_Avg_100", final_avg_100, 0)
+    writer.add_scalar("Training_Time", training_time, 0)
+    
+    # Close the tensorboard writer
+    writer.close()
     
     # Close the environment
     env.close()
@@ -232,7 +281,7 @@ def train_experiment(config, max_episodes=200, max_steps=500):
         "epsilon_values": epsilon_values,
         "training_time": training_time,
         "solved_episode": solved_episode,
-        "final_avg_100": np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores),
+        "final_avg_100": final_avg_100,
         "seed": config["seed"]
     }
 
@@ -275,6 +324,7 @@ def run_experiments():
     plt.tight_layout()
     plt.savefig("cartpole_experiment_results.png")
     experiment_log("Saved experiment results plot to cartpole_experiment_results.png")
+    experiment_log("To view all experiments in TensorBoard, run: tensorboard --logdir=runs")
 
 if __name__ == "__main__":
     run_experiments() 

@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import time
 import os
 import argparse
+from torch.utils.tensorboard import SummaryWriter
 
 # Set up logging
 LOG_FILE = "cartpole_training_log.txt"
@@ -166,7 +167,7 @@ class DQNAgent:
 log("Implementing DQN agent with experience replay and target network")
 
 # Training function
-def train_dqn(agent, env, num_episodes=500, max_steps=500, batch_size=64, success_threshold=487.5, seed=None):
+def train_dqn(agent, env, num_episodes=500, max_steps=500, batch_size=64, success_threshold=487.5, seed=None, writer=None):
     """
     Train the DQN agent.
     
@@ -178,6 +179,7 @@ def train_dqn(agent, env, num_episodes=500, max_steps=500, batch_size=64, succes
         batch_size: Batch size for training
         success_threshold: Average score over 100 episodes to consider the environment solved
         seed: Random seed for reproducibility
+        writer: TensorBoard SummaryWriter for logging
     
     Returns:
         Tuple of (scores, losses, epsilon_values)
@@ -224,13 +226,29 @@ def train_dqn(agent, env, num_episodes=500, max_steps=500, batch_size=64, succes
         losses.append(avg_loss)
         epsilon_values.append(agent.epsilon)
         
+        # Calculate running average
+        avg_100 = np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores)
+        
+        # Log to TensorBoard if writer is provided
+        if writer is not None:
+            writer.add_scalar("Score", score, episode)
+            writer.add_scalar("Avg_Loss", avg_loss, episode)
+            writer.add_scalar("Epsilon", agent.epsilon, episode)
+            writer.add_scalar("Avg_100_Score", avg_100, episode)
+        
         if episode % 10 == 0:
-            log(f"Episode {episode}: Score = {score}, Avg Loss = {avg_loss:.4f}, Epsilon = {agent.epsilon:.4f}")
+            log(f"Episode {episode}: Score = {score}, Avg Loss = {avg_loss:.4f}, Epsilon = {agent.epsilon:.4f}, Avg100 = {avg_100:.2f}")
         
         # Check if the environment is solved
-        if len(scores) >= 100 and np.mean(scores[-100:]) >= success_threshold:
-            log(f"Environment solved in {episode} episodes with average score of {np.mean(scores[-100:]):.2f}!")
+        if len(scores) >= 100 and avg_100 >= success_threshold:
+            log(f"Environment solved in {episode} episodes with average score of {avg_100:.2f}!")
             log(f"Success threshold was {success_threshold}")
+            
+            # Log final metrics to TensorBoard
+            if writer is not None:
+                writer.add_scalar("Final_Avg_100", avg_100, 0)
+                writer.add_scalar("Episodes_to_Solve", episode, 0)
+            
             break
     
     return scores, losses, epsilon_values
@@ -271,6 +289,32 @@ def main(args):
         random.seed(SEED)
         env.reset(seed=SEED)
     
+    # Create runs directory if it doesn't exist
+    if not os.path.exists("runs"):
+        os.makedirs("runs")
+        log("Created directory for TensorBoard logs at 'runs/'")
+    
+    # Create a TensorBoard writer
+    run_name = f"cartpole_main_seed{args.seed if args.seed is not None else SEED}"
+    writer = SummaryWriter(f"runs/{run_name}")
+    log(f"TensorBoard logs will be saved to runs/{run_name}")
+    
+    # Log hyperparameters
+    hparam_dict = {
+        "hidden_size": HIDDEN_SIZE,
+        "buffer_size": BUFFER_SIZE,
+        "batch_size": BATCH_SIZE,
+        "gamma": GAMMA,
+        "learning_rate": LEARNING_RATE,
+        "epsilon_decay": EPSILON_DECAY,
+        "target_update": TARGET_UPDATE,
+        "seed": SEED,
+        "episodes": args.episodes,
+        "threshold": args.threshold
+    }
+    metric_dict = {"final_avg_100": 0}  # Will be updated later
+    writer.add_hparams(hparam_dict, metric_dict)
+    
     log(f"Initializing DQN agent with hyperparameters:")
     log(f"  - Hidden layer size: {HIDDEN_SIZE}")
     log(f"  - Experience buffer size: {BUFFER_SIZE}")
@@ -298,6 +342,13 @@ def main(args):
         epsilon_min=EPSILON_MIN,
         update_target_every=TARGET_UPDATE
     )
+    
+    # Try to log model graph
+    try:
+        dummy_input = torch.zeros((1, state_size))
+        writer.add_graph(agent.policy_net, dummy_input)
+    except Exception as e:
+        log(f"Couldn't add model graph to TensorBoard: {e}")
 
     log("Starting training")
     start_time = time.time()
@@ -308,10 +359,14 @@ def main(args):
         max_steps=500,
         batch_size=BATCH_SIZE,
         success_threshold=args.threshold,
-        seed=args.seed
+        seed=args.seed,
+        writer=writer
     )
     training_time = time.time() - start_time
     log(f"Training completed in {training_time:.2f} seconds")
+    
+    # Log final training time
+    writer.add_scalar("Training_Time", training_time, 0)
     
     # Save the trained model
     model_path = "cartpole_dqn_model.pth"
@@ -344,10 +399,17 @@ def main(args):
     # Evaluate the trained agent
     eval_score = evaluate_agent(agent, env, num_episodes=10)
     
+    # Update the final metric for hparams
+    metric_dict["final_avg_100"] = np.mean(scores[-100:]) if len(scores) >= 100 else np.mean(scores)
+    
+    # Close the TensorBoard writer
+    writer.close()
+    
     # Close the environment
     env.close()
     log("Environment closed")
     log("CartPole reinforcement learning experiment completed successfully!")
+    log("To view training progress in TensorBoard, run: tensorboard --logdir=runs")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train DQN agent for CartPole')
@@ -359,4 +421,6 @@ if __name__ == "__main__":
     main(args)
     
     print("\nRun the following command to execute the training:")
-    print("python cartpole_rl.py [--seed SEED] [--episodes EPISODES] [--threshold THRESHOLD]") 
+    print("python cartpole_rl.py [--seed SEED] [--episodes EPISODES] [--threshold THRESHOLD]")
+    print("\nTo view training progress in TensorBoard, run:")
+    print("tensorboard --logdir=runs") 
