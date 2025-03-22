@@ -46,6 +46,7 @@ EPSILON_MIN = 0.01
 TARGET_UPDATE = 10
 NUM_EPISODES = 500
 SUCCESS_THRESHOLD = 487.5
+USE_TARGET_NETWORK = True  # Default is to use target network
 
 # Set random seeds for reproducibility - now generating a random seed by default
 SEED = int(time.time()) % 10000  # Use current time as seed by default
@@ -93,7 +94,7 @@ log("Implementing experience replay buffer for storing transitions")
 class DQNAgent:
     def __init__(self, state_size, action_size, hidden_size=64, buffer_size=10000, batch_size=64, 
                  learning_rate=0.001, epsilon=1.0, epsilon_decay=0.995, 
-                 epsilon_min=0.01, update_target_every=10):
+                 epsilon_min=0.01, update_target_every=10, use_target_network=True):
         self.state_size = state_size
         self.action_size = action_size
         self.memory = ReplayBuffer(buffer_size)
@@ -103,6 +104,7 @@ class DQNAgent:
         self.epsilon_min = epsilon_min
         self.update_target_every = update_target_every
         self.target_update_counter = 0
+        self.use_target_network = use_target_network
         
         # Main network for training
         self.policy_net = DQNetwork(state_size, action_size, hidden_size)
@@ -142,7 +144,11 @@ class DQNAgent:
         
         # Compute target Q values
         with torch.no_grad():
-            next_q_values = self.target_net(next_states).max(1)[0]
+            # Use target network if enabled, otherwise use policy network
+            if self.use_target_network:
+                next_q_values = self.target_net(next_states).max(1)[0]
+            else:
+                next_q_values = self.policy_net(next_states).max(1)[0]
         target_q_values = rewards + (next_q_values * (1 - dones))
         
         # Compute loss and optimize
@@ -151,10 +157,11 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
         
-        # Update target network
-        self.target_update_counter += 1
-        if self.target_update_counter % self.update_target_every == 0:
-            self.target_net.load_state_dict(self.policy_net.state_dict())
+        # Update target network if using it
+        if self.use_target_network:
+            self.target_update_counter += 1
+            if self.target_update_counter % self.update_target_every == 0:
+                self.target_net.load_state_dict(self.policy_net.state_dict())
             
         # Decay epsilon
         if self.epsilon > self.epsilon_min:
@@ -384,7 +391,7 @@ def evaluate_agent(agent, env, num_episodes=10, render=False):
 
 def main(args):
     """Main function to run the training with command line arguments."""
-    global SEED
+    global SEED, USE_TARGET_NETWORK
     
     if args.seed is not None:
         log(f"Using command-line provided seed: {args.seed}")
@@ -394,13 +401,18 @@ def main(args):
         random.seed(SEED)
         env.reset(seed=SEED)
     
+    # Update target network usage from args
+    if args.no_target_network:
+        USE_TARGET_NETWORK = False
+        log("Running without target network")
+    
     # Create runs directory if it doesn't exist
     if not os.path.exists("runs"):
         os.makedirs("runs")
         log("Created directory for TensorBoard logs at 'runs/'")
     
     # Create a TensorBoard writer
-    run_name = f"cartpole_main_seed{args.seed if args.seed is not None else SEED}"
+    run_name = f"cartpole_{time.strftime('%Y%m%d-%H%M%S')}_main_seed_{args.seed if args.seed is not None else SEED}_{'no_target' if not USE_TARGET_NETWORK else 'with_target'}"
     writer = SummaryWriter(f"runs/{run_name}")
     log(f"TensorBoard logs will be saved to runs/{run_name}")
     
@@ -415,7 +427,8 @@ def main(args):
         epsilon=EPSILON,
         epsilon_decay=EPSILON_DECAY,
         epsilon_min=EPSILON_MIN,
-        update_target_every=TARGET_UPDATE
+        update_target_every=TARGET_UPDATE,
+        use_target_network=USE_TARGET_NETWORK
     )
     
     # Log hyperparameters - more comprehensive dictionary
@@ -433,7 +446,8 @@ def main(args):
         "network_structure": "2-layer MLP",
         "optimizer": "Adam",
         "loss_function": "MSE",
-        "seed": SEED
+        "seed": SEED,
+        "use_target_network": USE_TARGET_NETWORK
     }
     
     # We'll fill these metrics after training
@@ -449,6 +463,7 @@ def main(args):
     log(f"  - Epsilon decay: {EPSILON_DECAY}")
     log(f"  - Minimum epsilon: {EPSILON_MIN}")
     log(f"  - Target network update frequency: {TARGET_UPDATE}")
+    log(f"  - Using target network: {USE_TARGET_NETWORK}")
     log(f"  - Number of episodes: {args.episodes}")
     log(f"  - Success threshold: {args.threshold}")
     
@@ -539,9 +554,6 @@ def main(args):
         if metric_value != -1:  # Don't log -1 values (e.g., if threshold not reached)
             writer.add_scalar(metric_name, metric_value, 0)
     
-    # Log hyperparameters and associated metrics for the hparams dashboard
-    writer.add_hparams(hparam_dict, metric_dict)
-    
     # Close the TensorBoard writer
     writer.close()
     
@@ -556,11 +568,12 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=None, help='Random seed for reproducibility')
     parser.add_argument('--episodes', type=int, default=NUM_EPISODES, help='Maximum number of episodes')
     parser.add_argument('--threshold', type=float, default=SUCCESS_THRESHOLD, help='Success threshold (average score over 100 episodes)')
+    parser.add_argument('--no-target-network', action='store_true', help='Disable the use of target network for Q-learning')
     args = parser.parse_args()
     
     main(args)
     
     print("\nRun the following command to execute the training:")
-    print("python cartpole_rl.py [--seed SEED] [--episodes EPISODES] [--threshold THRESHOLD]")
+    print("python cartpole_rl.py [--seed SEED] [--episodes EPISODES] [--threshold THRESHOLD] [--no-target-network]")
     print("\nTo view training progress in TensorBoard, run:")
     print("tensorboard --logdir=runs") 

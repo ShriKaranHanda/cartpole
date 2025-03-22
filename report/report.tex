@@ -128,10 +128,31 @@ The learning algorithm follows these steps for each episode:
 I conducted a series of experiments to evaluate the performance of the DQN algorithm with different hyperparameter configurations.
 
 \subsection{Experimental Setup}
-For the experiments, I trained a DQN agent on the CartPole-v1 environment from Gymnasium. The success criterion was achieving an average reward of at least 487.5 over 100 consecutive episodes.
+For the experiments, I trained a DQN agent on the CartPole-v1 environment from Gymnasium. The baseline configuration used the following hyperparameters:
+\begin{itemize}
+    \item Hidden layer size: 128 neurons
+    \item Experience replay buffer size: 10,000 transitions
+    \item Batch size: 64
+    \item Learning rate: 0.0001
+    \item Initial epsilon: 1.0
+    \item Epsilon decay rate: 0.995
+    \item Minimum epsilon: 0.01
+    \item Target network update frequency: Every 10 steps
+    \item Maximum episodes: 500
+    \item Success threshold: 487.5 (average reward over 100 consecutive episodes)
+\end{itemize}
+
+The success criterion was achieving an average reward of at least 487.5 over 100 consecutive episodes.
 
 \subsection{Target Network Ablation Study}
-To validate the importance of the target network, I conducted an ablation study by training models with and without target networks. Surprisingly, both approaches worked well for the CartPole problem, suggesting that this environment may be simple enough that some of the stabilization techniques required for more complex domains are not strictly necessary. 
+To validate the importance of the target network, I conducted an ablation study by training models with and without target networks. I performed 10 training runs with different random seeds, keeping the seed identical for paired target/non-target runs to ensure a fair comparison. Each model was trained for 500 episodes only. Interestingly, the results showed a clear difference: two of the target network runs successfully solved the environment (reaching the 487.5 threshold), while none of the runs without target networks managed to solve it. This confirms the importance of target networks for stabilizing learning, even in relatively simple environments like CartPole. \ref{fig:target_ablation} shows the results of the ablation study.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.7\textwidth]{media/target_ablation.png}
+  \caption{Ablation study comparing performance with target network (black) and without target network (blue). The y-axis shows the average reward over 100 episodes, and the x-axis shows the episode number.}
+  \label{fig:target_ablation}
+  \end{figure}
 
 \section{Final Results}
 After extensive experimentation, I evaluated the performance of each configuration against the success criterion of achieving an average reward of at least 487.5 over 100 consecutive episodes. Having a learning rate of 0.0001, I was able to solve the environment by achieving an average score above the threshold of 487.5.
@@ -143,6 +164,8 @@ Through systematic experimentation, I discovered several important factors affec
     \item \textbf{Learning Rate Impact:} High learning rates (0.001-0.005) led to promising initial results but suffered from "catastrophic forgetting" after periods of good performance. Reducing the learning rate to 0.0001 significantly improved stability and led to solving the environment.
     
     \item \textbf{Loss vs. Reward Discrepancy:} Loss values often became very low while rewards continued to fluctuate. This disconnect is explained by the moving target phenomenon in DQN - as both networks change during training, the agent constantly chases a changing objective.
+    
+    \item \textbf{Target Network Importance:} The target network is crucial for stabilizing learning, even in relatively simple environments like CartPole.
 \end{enumerate}
 
 \section{Conclusion}

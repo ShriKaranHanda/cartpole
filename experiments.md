@@ -5,8 +5,6 @@ Questions:
 - Why doesn't the loss correspond to the reward? It seems like the loss becomes really low, but the reward seems to fluctuate
   - Because a moving target is being chased.
 
-Tried to do a few hyperparam sweeps over network size, faster epsilon decay, higher learning rate
-
 Changing learning rate from 0.001 to 0.0001 made the difference.
 
 Then reproduced this for different seeds.
