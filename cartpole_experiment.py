@@ -37,7 +37,6 @@ experiment_configs = [
         "hidden_size": 128,
         "buffer_size": 10000,
         "batch_size": 64,
-        "gamma": 0.99,
         "learning_rate": 0.001,
         "epsilon": 1.0,
         "epsilon_decay": 0.995,
@@ -50,7 +49,6 @@ experiment_configs = [
         "hidden_size": 256,
         "buffer_size": 10000,
         "batch_size": 64,
-        "gamma": 0.99,
         "learning_rate": 0.001,
         "epsilon": 1.0,
         "epsilon_decay": 0.995,
@@ -63,7 +61,6 @@ experiment_configs = [
         "hidden_size": 128,
         "buffer_size": 10000,
         "batch_size": 64,
-        "gamma": 0.99,
         "learning_rate": 0.001,
         "epsilon": 1.0,
         "epsilon_decay": 0.98,
@@ -76,7 +73,6 @@ experiment_configs = [
         "hidden_size": 128,
         "buffer_size": 10000,
         "batch_size": 64,
-        "gamma": 0.99,
         "learning_rate": 0.005,
         "epsilon": 1.0,
         "epsilon_decay": 0.995,
@@ -93,7 +89,6 @@ class DQNAgentExperiment:
         self.config = config
         self.memory = ReplayBuffer(config["buffer_size"])
         self.batch_size = config["batch_size"]
-        self.gamma = config["gamma"]
         self.epsilon = config["epsilon"]
         self.epsilon_decay = config["epsilon_decay"]
         self.epsilon_min = config["epsilon_min"]
@@ -139,7 +134,7 @@ class DQNAgentExperiment:
         # Compute target Q values
         with torch.no_grad():
             next_q_values = self.target_net(next_states).max(1)[0]
-        target_q_values = rewards + (self.gamma * next_q_values * (1 - dones))
+        target_q_values = rewards + (next_q_values * (1 - dones))
         
         # Compute loss and optimize
         loss = self.loss_fn(current_q_values, target_q_values)
@@ -187,7 +182,6 @@ def train_experiment(config, max_episodes=500, max_steps=500):
         "hidden_size": config["hidden_size"],
         "buffer_size": config["buffer_size"],
         "batch_size": config["batch_size"],
-        "gamma": config["gamma"],
         "learning_rate": config["learning_rate"],
         "initial_epsilon": config["epsilon"],
         "epsilon_decay": config["epsilon_decay"],
@@ -273,7 +267,7 @@ def train_experiment(config, max_episodes=500, max_steps=500):
                     current_q = agent.policy_net(state_tensor).gather(1, torch.tensor([[action]])).item()
                     next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
                     next_q = agent.target_net(next_state_tensor).max(1)[0].item()
-                    target_q = reward + (1 - int(done)) * agent.gamma * next_q
+                    target_q = reward + (1 - int(done)) * next_q
                     td_error = abs(current_q - target_q)
                     episode_td_errors.append(td_error)
             

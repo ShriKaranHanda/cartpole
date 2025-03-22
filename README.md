@@ -54,8 +54,7 @@ The implementation uses the following hyperparameters:
 - Hidden layer size: 128 neurons per layer
 - Experience buffer size: 10,000 transitions
 - Batch size: 64
-- Discount factor (gamma): 0.99
-- Learning rate: 0.001
+- Learning rate: 0.0001
 - Initial epsilon: 1.0
 - Epsilon decay: 0.995
 - Minimum epsilon: 0.01

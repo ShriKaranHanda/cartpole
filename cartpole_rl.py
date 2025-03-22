@@ -39,7 +39,6 @@ log(f"Environment created with state size {state_size} and action size {action_s
 HIDDEN_SIZE = 128
 BUFFER_SIZE = 10000
 BATCH_SIZE = 64
-GAMMA = 0.99
 LEARNING_RATE = 0.0001
 EPSILON = 1.0
 EPSILON_DECAY = 0.995
@@ -93,13 +92,12 @@ log("Implementing experience replay buffer for storing transitions")
 # DQN Agent
 class DQNAgent:
     def __init__(self, state_size, action_size, hidden_size=64, buffer_size=10000, batch_size=64, 
-                 gamma=0.99, learning_rate=0.001, epsilon=1.0, epsilon_decay=0.995, 
+                 learning_rate=0.001, epsilon=1.0, epsilon_decay=0.995, 
                  epsilon_min=0.01, update_target_every=10):
         self.state_size = state_size
         self.action_size = action_size
         self.memory = ReplayBuffer(buffer_size)
         self.batch_size = batch_size
-        self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
@@ -145,7 +143,7 @@ class DQNAgent:
         # Compute target Q values
         with torch.no_grad():
             next_q_values = self.target_net(next_states).max(1)[0]
-        target_q_values = rewards + (self.gamma * next_q_values * (1 - dones))
+        target_q_values = rewards + (next_q_values * (1 - dones))
         
         # Compute loss and optimize
         loss = self.loss_fn(current_q_values, target_q_values)
@@ -248,7 +246,7 @@ def train_dqn(agent, env, num_episodes=500, max_steps=500, batch_size=64, succes
                     current_q = agent.policy_net(state_tensor).gather(1, torch.tensor([[action]])).item()
                     next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
                     next_q = agent.target_net(next_state_tensor).max(1)[0].item()
-                    target_q = reward + (1 - int(done)) * agent.gamma * next_q
+                    target_q = reward + (1 - int(done)) * next_q
                     td_error = abs(current_q - target_q)
                     episode_td_errors.append(td_error)
             
@@ -413,7 +411,6 @@ def main(args):
         hidden_size=HIDDEN_SIZE,
         buffer_size=BUFFER_SIZE,
         batch_size=BATCH_SIZE,
-        gamma=GAMMA,
         learning_rate=LEARNING_RATE,
         epsilon=EPSILON,
         epsilon_decay=EPSILON_DECAY,
@@ -426,7 +423,6 @@ def main(args):
         "hidden_size": HIDDEN_SIZE,
         "buffer_size": BUFFER_SIZE,
         "batch_size": BATCH_SIZE,
-        "gamma": GAMMA,
         "learning_rate": LEARNING_RATE,
         "initial_epsilon": EPSILON,
         "epsilon_decay": EPSILON_DECAY,
@@ -448,7 +444,6 @@ def main(args):
     log(f"  - Hidden layer size: {HIDDEN_SIZE}")
     log(f"  - Experience buffer size: {BUFFER_SIZE}")
     log(f"  - Batch size: {BATCH_SIZE}")
-    log(f"  - Discount factor (gamma): {GAMMA}")
     log(f"  - Learning rate: {LEARNING_RATE}")
     log(f"  - Initial epsilon: {EPSILON}")
     log(f"  - Epsilon decay: {EPSILON_DECAY}")
