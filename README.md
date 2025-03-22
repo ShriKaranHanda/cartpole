@@ -1,71 +1,68 @@
-# CartPole-DQN
+# CartPole Reinforcement Learning Solution
 
-A Deep Q-Network (DQN) implementation to solve the CartPole problem from OpenAI Gymnasium.
+This project implements a Deep Q-Network (DQN) to solve the CartPole problem from the Gymnasium (formerly OpenAI Gym) environment.
 
-## About CartPole
+## Problem Description
 
-CartPole is a classic control problem in reinforcement learning. The goal is to balance a pole attached to a movable cart by applying forces to the left or right. The environment is considered solved when the agent achieves an average score of 475 over 100 consecutive episodes in CartPole-v1.
+CartPole is a classic reinforcement learning problem where a pole is attached to a cart that moves along a frictionless track. The goal is to prevent the pole from falling over by moving the cart left or right.
 
-State space: 4-dimensional (cart position, cart velocity, pole angle, pole angular velocity)
-Action space: 2 actions (push cart left or right)
-Reward: +1 for each timestep the pole remains upright
-Episode termination: pole angle > 15°, cart position > 2.4, or episode length > 500
+## Implementation Details
 
-## Implementation
+- Deep Q-Network (DQN) with experience replay and target network
+- Feed-forward neural network with two hidden layers
+- Epsilon-greedy exploration strategy with decay
+- Complete logging of training progress
 
-This implementation uses:
-- **Deep Q-Network (DQN)**: Combines Q-learning with a neural network to approximate the Q-function
-- **Experience Replay**: Stores and samples past experiences to break correlations
-- **Target Network**: Uses a separate network for generating targets to improve stability
+## Setup
 
-## Requirements
-
+1. Create a virtual environment:
 ```
-gymnasium==0.28.1
-torch==2.0.1
-numpy==1.24.3
-matplotlib==3.7.1
+python -m venv venv
 ```
 
-## Getting Started
+2. Activate the virtual environment:
+```
+# On Windows
+venv\Scripts\activate
 
-1. Install dependencies:
-```bash
+# On macOS/Linux
+source venv/bin/activate
+```
+
+3. Install dependencies:
+```
 pip install -r requirements.txt
 ```
 
-2. Train the agent:
-```bash
-python train.py --train
-```
-This will create a model file in the `models/` directory.
+## Usage
 
-3. Test the trained agent:
-```bash
-python train.py --test
+Run the training script:
 ```
-Note: You must train the agent first before testing, or specify a path to a pre-trained model:
-```bash
-python train.py --test --model_path models/CartPole-v1_dqn.pth
+python cartpole_rl.py
 ```
 
-## Project Structure
+The script will:
+1. Train the DQN agent on the CartPole environment
+2. Log all training steps to `cartpole_training_log.txt`
+3. Save the trained model to `cartpole_dqn_model.pth`
+4. Generate training metrics plot in `cartpole_training_results.png`
+5. Evaluate the trained agent
 
-- `dqn_agent.py`: Contains the DQN agent implementation, neural network, and replay buffer
-- `train.py`: Script to train the agent on the CartPole environment and visualize results
-- `models/`: Directory where trained models are saved
-- `plots/`: Directory where training plots are saved
+## Hyperparameters
+
+The implementation uses the following hyperparameters:
+- Hidden layer size: 128 neurons per layer
+- Experience buffer size: 10,000 transitions
+- Batch size: 64
+- Learning rate: 0.0001
+- Initial epsilon: 1.0
+- Epsilon decay: 0.995
+- Minimum epsilon: 0.01
+- Target network update frequency: Every 10 steps
+- Maximum episodes: 500
+
+These can be modified in the script to experiment with different settings.
 
 ## Results
 
-After training, the agent should be able to balance the pole for the maximum episode length of 500 timesteps consistently. Training typically takes a few hundred episodes to reach the solving criteria.
-
-## Customization
-
-You can modify hyperparameters such as:
-- Learning rate
-- Network architecture
-- Epsilon decay strategy
-- Replay buffer size
-- Batch size
-- Target network update frequency 
+The environment is considered solved when the agent gets an average score of at least 195.0 over 100 consecutive episodes. 
