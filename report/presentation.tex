@@ -1,0 +1,280 @@
+\documentclass[
+    9pt,
+    aspectratio=169,
+]{beamer}
+
+\graphicspath{{media/}{./}}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\usetheme{Madrid} 
+\definecolor{myRed}{RGB}{170, 0, 0}
+\definecolor{myOrange}{RGB}{13,56,98}
+
+\setbeamercolor*{structure}{bg=myRed!20,fg=myRed!90}
+
+\setbeamercolor*{palette primary}{use=structure,fg=white,bg=structure.fg}
+\setbeamercolor*{palette secondary}{use=structure,fg=myRed,bg=white}
+\setbeamercolor*{palette tertiary}{use=structure,fg=white,bg=myRed} 
+
+\setbeamercolor{frametitle}{bg=myRed!85,fg=white}
+
+\setbeamercolor*{titlelike}{parent=palette primary}
+
+\setbeamercolor{section in head/foot}{fg=myOrange, bg=white}
+
+\setbeamercolor{item projected}{bg=myOrange}
+\setbeamertemplate{enumerate items}{bg=myOrange}
+
+\setbeamercolor{itemize item}{fg=myOrange}
+\setbeamercolor{itemize subitem}{fg=myOrange}
+
+\setbeamercolor{button}{bg=myOrange}
+
+\setbeamercolor{section in toc}{fg=black}
+\setbeamercolor{subsection in toc}{fg=black}
+
+\setbeamercolor{block title}{bg=myOrange, fg=white}
+\setbeamercolor{block body}{bg=myOrange!20}
+
+\usefonttheme{serif}
+\usepackage{palatino}
+\usepackage[default]{opensans}
+\useinnertheme{circles}
+
+\useoutertheme{miniframes}
+
+\title[Deep-Q Learning for CartPole]{Deep-Q Learning for CartPole Control}
+\author[Karan Handa]{Author: Karan Handa}
+
+\institute[]{Computer Science \\ \smallskip \textit{karan.handa\_asp24@ashoka.edu.in}}
+\date[Spring 2025\textbf{}]
+%\date[\today]
+
+\logo{\includegraphics[width=2.5cm]{media/ashoka.png}}
+
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+\begin{frame}
+\frametitle{Outline}
+\tableofcontents
+\end{frame}
+
+\section{Introduction}
+
+\begin{frame}
+\frametitle{Introduction}
+\begin{itemize}
+    \item \textbf{Reinforcement Learning (RL):} Agent learns through environmental interaction
+    \item \textbf{CartPole:} Classic control problem 
+    \begin{itemize}
+        \item Balance a pole attached to a cart
+        \item Apply forces to keep system stable
+    \end{itemize}
+    \item \textbf{Deep Q-Network (DQN):} 
+    \begin{itemize}
+        \item Combines Q-learning with neural networks
+        \item Approximates action-value function
+    \end{itemize}
+    \item \textbf{Key techniques:}
+    \begin{itemize}
+        \item Experience replay
+        \item Target networks
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\section{Literature Review}
+
+\begin{frame}
+\frametitle{Literature Review}
+\begin{block}{Classical RL Foundations}
+    \begin{itemize}
+        \item Bellman's dynamic programming (1950s)
+        \item Watkins' Q-learning (1989) - model-free approach
+        \item CartPole introduced by Barto, Sutton, and Anderson (1983)
+    \end{itemize}
+\end{block}
+
+\begin{block}{Deep Q-Networks (DQN)}
+    \begin{itemize}
+        \item Mnih et al. (2013) - DQN for Atari games
+        \item Mnih et al. (2015) - Target networks
+        \item Lin (1992) - Early proposals for experience replay
+    \end{itemize}
+\end{block}
+\end{frame}
+
+\section{Environment Description}
+
+\begin{frame}
+\frametitle{CartPole Environment}
+\begin{columns}
+\column{0.5\textwidth}
+\includegraphics[width=\textwidth]{media/cartpole_diagram.png}
+\column{0.5\textwidth}
+\textbf{State space (4D):}
+\begin{itemize}
+    \item Cart position $\in [-4.8, 4.8]$
+    \item Cart velocity 
+    \item Pole angle $\in [-24°, 24°]$
+    \item Pole angular velocity
+\end{itemize}
+
+\textbf{Action space:}
+\begin{itemize}
+    \item 0: Push left
+    \item 1: Push right
+\end{itemize}
+
+\textbf{Reward:} +1 for every timestep
+\end{columns}
+
+\begin{block}{Episode Termination}
+    \begin{itemize}
+        \item Pole angle exceeds $\pm 12^{\circ}$
+        \item Cart position exceeds $\pm 2.4$ units
+        \item Episode length $>$ 500 steps
+    \end{itemize}
+\end{block}
+\end{frame}
+
+\section{Methods}
+
+\begin{frame}
+\frametitle{DQN Implementation}
+\begin{block}{Network Architecture}
+    \begin{itemize}
+        \item Input: 4 neurons (state dimensions)
+        \item Hidden layers: 2 × 128 neurons with ReLU
+        \item Output: 2 neurons (possible actions)
+    \end{itemize}
+\end{block}
+
+\begin{block}{Key Components}
+    \begin{itemize}
+        \item \textbf{Experience Replay:} Buffer of 10,000 transitions
+        \item \textbf{Target Network:} Updated every 10 steps
+        \item \textbf{Exploration:} $\epsilon$-greedy policy
+        \begin{itemize}
+            \item Starting $\epsilon = 1.0$ (pure exploration)
+            \item Decay rate: 0.995
+            \item Minimum $\epsilon = 0.01$
+        \end{itemize}
+    \end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{Learning Process}
+\begin{enumerate}
+    \item Initialize environment, get initial state
+    \item For each timestep:
+    \begin{enumerate}
+        \item Select action using $\epsilon$-greedy policy
+        \item Execute action, observe reward and next state
+        \item Store transition in replay buffer
+        \item Sample random batch from buffer
+        \item Calculate target Q-values:
+        \begin{equation}
+            Q_{\text{target}}(s,a) = r + \gamma \max_{a'} Q_{\text{target}}(s',a')
+        \end{equation}
+        \item Update policy network (MSE loss + Adam optimizer)
+        \item Update target network periodically
+        \item Decay $\epsilon$
+    \end{enumerate}
+    \item Continue until solved or max episodes reached
+\end{enumerate}
+\end{frame}
+
+\section{Experimentation}
+
+\begin{frame}
+\frametitle{Experimental Setup}
+\begin{block}{Baseline Configuration}
+    \begin{itemize}
+        \item Neural network: 2 hidden layers, 128 neurons each
+        \item Experience replay: 10,000 transitions buffer
+        \item Batch size: 64
+        \item Learning rate: 0.0001
+        \item Target network update: Every 10 steps
+        \item Success criterion: Average reward $\geq$ 487.5 over 100 episodes
+    \end{itemize}
+\end{block}
+
+\begin{block}{Target Network Ablation Study}
+    \begin{itemize}
+        \item Compared models with and without target networks
+        \item 10 training runs with different random seeds
+        \item Each model trained for 500 episodes
+    \end{itemize}
+\end{block}
+\end{frame}
+
+\section{Results}
+
+\begin{frame}
+\frametitle{Key Results}
+\begin{columns}
+\column{0.5\textwidth}
+\includegraphics[width=\textwidth]{media/target_ablation.png}
+\column{0.5\textwidth}
+\begin{block}{Target Network Impact}
+    \begin{itemize}
+        \item With target network (black): 2/10 runs solved environment
+        \item Without target network (blue): 0/10 runs solved environment
+        \item Target networks crucial for stable learning
+    \end{itemize}
+\end{block}
+\end{columns}
+
+\begin{block}{Key Findings}
+    \begin{itemize}
+        \item \textbf{Learning rate impact:} 0.0001 provided best stability
+        \item \textbf{Loss vs. reward discrepancy:} Moving target phenomenon
+        \item \textbf{Target network importance:} Critical even for simple environments
+    \end{itemize}
+\end{block}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}
+\frametitle{Conclusion}
+\begin{block}{Summary}
+    Successfully implemented DQN for CartPole with valuable insights:
+    \begin{itemize}
+        \item Learning rate optimization crucial for stability
+        \item Target networks significantly improve learning
+        \item Careful hyperparameter tuning needed
+    \end{itemize}
+\end{block}
+
+\begin{block}{Future Work}
+    \begin{itemize}
+        \item Advanced algorithms: Double DQN, Dueling DQN, Prioritized Experience Replay
+        \item Policy gradient methods: REINFORCE, PPO
+        \item Systematic hyperparameter optimization
+        \item Transfer learning to varied CartPole problems
+    \end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{Thank You}
+\begin{center}
+\Large Questions?
+
+\bigskip
+\normalsize
+Contact: karan.handa\_asp24@ashoka.edu.in
+\end{center}
+\end{frame}
+
+\end{document} 

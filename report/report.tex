@@ -87,7 +87,7 @@ For the purposes of this report, I consider the problem "solved" when the agent 
 I implemented a Deep Q-Network (DQN) to solve the CartPole problem. DQN is a value-based reinforcement learning algorithm that uses a neural network to approximate the Q-value function, which predicts the expected future rewards for each action given the current state. The implementation consists of several key components:
 
 \subsection{Network Architecture}
-The Q-network uses a simple feed-forward architecture with 4 input neurons matching CartPole's state dimensions, two hidden layers (128 neurons each in baseline configuration) with ReLU activations, and 2 output neurons corresponding to the possible actions.
+The Q-network uses a simple feed-forward architecture with 4 input neurons matching CartPole's state dimensions, three hidden layers (128 neurons each) with ReLU activations, and 2 output neurons corresponding to the possible actions.
 
 \subsection{Experience Replay}
 To break correlations between consecutive samples and improve learning stability, I implemented an experience replay buffer \cite{mnih2013} that stores transitions (state, action, reward, next state, done). During training, random batches are sampled from this buffer instead of using the most recent transition. The buffer has a fixed size (10,000 transitions), and once full, the oldest transitions are discarded.
