@@ -13,6 +13,5 @@ __pycache__
 *.toc
 *.bbl
 *.blg
-*.pth
 *_log.txt
 final_submission

@@ -151,21 +151,21 @@
 \frametitle{DQN Implementation}
 \begin{block}{Network Architecture}
     \begin{itemize}
-        \item Input: 4 neurons (state dimensions)
-        \item Hidden layers: 2 × 128 neurons with ReLU
-        \item Output: 2 neurons (possible actions)
+        \item Feed-forward neural network matching CartPole's state dimensions
+        \item Multiple hidden layers with ReLU activations
+        \item Output layer corresponding to possible actions
     \end{itemize}
 \end{block}
 
 \begin{block}{Key Components}
     \begin{itemize}
-        \item \textbf{Experience Replay:} Buffer of 10,000 transitions
-        \item \textbf{Target Network:} Updated every 10 steps
-        \item \textbf{Exploration:} $\epsilon$-greedy policy
+        \item \textbf{Experience Replay:} Stores transitions to break correlations between consecutive samples
+        \item \textbf{Target Network:} Stabilizes training by providing consistent TD update targets
+        \item \textbf{Exploration:} $\epsilon$-greedy policy balancing exploration and exploitation
         \begin{itemize}
-            \item Starting $\epsilon = 1.0$ (pure exploration)
-            \item Decay rate: 0.995
-            \item Minimum $\epsilon = 0.01$
+            \item Starts with pure exploration
+            \item Gradually transitions to exploitation through decay
+            \item Maintains minimum exploration rate
         \end{itemize}
     \end{itemize}
 \end{block}
@@ -199,7 +199,7 @@
 \frametitle{Experimental Setup}
 \begin{block}{Baseline Configuration}
     \begin{itemize}
-        \item Neural network: 2 hidden layers, 128 neurons each
+        \item Neural network: 3 hidden layers, 128 neurons each
         \item Experience replay: 10,000 transitions buffer
         \item Batch size: 64
         \item Learning rate: 0.0001
@@ -222,7 +222,7 @@
 \begin{frame}
 \frametitle{Key Results}
 \begin{columns}
-\column{0.5\textwidth}
+\column{0.4\textwidth}
 \includegraphics[width=\textwidth]{media/target_ablation.png}
 \column{0.5\textwidth}
 \begin{block}{Target Network Impact}
@@ -269,7 +269,7 @@
 \begin{frame}
 \frametitle{Thank You}
 \begin{center}
-\Large Questions?
+\Large Thank you!
 
 \bigskip
 \normalsize

@@ -46,7 +46,11 @@ The script will:
 2. Log all training steps to `cartpole_training_log.txt`
 3. Save the trained model to `cartpole_dqn_model.pth`
 4. Generate training metrics plot in `cartpole_training_results.png`
-5. Evaluate the trained agent
+
+See the trained model in action
+```
+python visualize_cartpole.py
+```
 
 ## Hyperparameters
 
@@ -65,4 +69,4 @@ These can be modified in the script to experiment with different settings.
 
 ## Results
 
-The environment is considered solved when the agent gets an average score of at least 195.0 over 100 consecutive episodes. 
+The environment is considered solved when the agent gets an average score of at least 487.5 over 100 consecutive episodes. 
